@@ -167,7 +167,9 @@
 
 
     loadNtfySettings();
-    registerNtfyMenu();
+    if (window.top === window.self) {
+        registerNtfyMenu();
+    }
 
 
     /*
