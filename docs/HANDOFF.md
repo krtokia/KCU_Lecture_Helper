@@ -14,8 +14,8 @@
 | 업데이트 문제 | 제공된 1.0.1에 @downloadURL none이 들어갔다. 사용자는 자신의 배포본 업데이트를 막는 것에 이의를 제기했다. 조용히 유지하거나 배포하면 안 된다. |
 | Navigator POC 3 | 2026-09-08 리포트에 scriptVersion 0.3.0, phase PLAYING, finishedAt/result null. 실제 playing 확인은 있지만 해당 리포트는 완료 검증 결과가 아니다. |
 | Navigator POC 3.1 | `src/kcu-auto-navigator.user.js`에 0.3.1 내보낸 소스를 로컬 이관했다. 파일 존재는 사용자 전달·설치·실행 성공을 뜻하지 않는다. |
-| 현재 설치본 | Helper 1.0.0과 Navigator 0.3.1 내보낸 소스를 로컬 이관했다. 실제 Tampermonkey 설치본과의 일치 및 KCU 동작은 미검증이다. |
-| 원격 저장소 | 공개 `krtokia/KCU_Lecture_Helper`, 기본 브랜치 `main`. GitHub 추적용이며 자동 업데이트는 미구성. |
+| 현재 로컬 배포 소스 | Helper 1.0.1과 Navigator 0.3.2에 GitHub Raw `main`의 동일한 `@updateURL`/`@downloadURL`을 추가했다. Navigator 런타임 VERSION도 0.3.2로 맞췄다. 실제 Tampermonkey 설치본과의 일치 및 KCU 동작은 미검증이다. |
+| 원격 저장소 | 공개 `krtokia/KCU_Lecture_Helper`, 기본 브랜치 `main`. GitHub Raw 자동 업데이트 메타데이터를 사용하며 실제 Tampermonkey 업데이트는 미검증. |
 
 Helper 교체는 Navigator 업그레이드가 아니다. 이전의 “이미 받은 3.1을 실행” 안내를 사실로 이어받지 않는다. [P1, P2, P4, P5]
 
@@ -75,3 +75,8 @@ C. 실제 Navigator 기준 소스에서 3.1 요구와 차이를 비교 → 별�
 ## 7. 2026-09-09 로컬 이관 기록
 `src/kcu-lecture-helper.user.js`와 `src/kcu-auto-navigator.user.js`로 파일명을 정리했다. Helper는 개인 ntfy 상수를 제거하고, 빈 주소·비활성 기본값의 Tampermonkey 로컬 설정과 메뉴를 사용한다. `@connect ntfy.sh`와 배포용 URL 부재 상태는 그대로이며, 기존 Greasy Fork 게시물 변경과 Tampermonkey/KCU 브라우저 검증은 수행하지 않았다.
 민감한 경로/원본 로그는 공개 문서에 쓰지 않는다.
+
+## 8. 2026-09-09 GitHub Raw 자동 업데이트 메타데이터
+두 UserScript의 `@updateURL`과 `@downloadURL`을 각각 같은 공개 GitHub Raw `main` 소스 주소로 추가했다. Helper는 1.0.1, Navigator는 0.3.2로 patch 버전을 올렸고 Navigator의 런타임 VERSION도 0.3.2로 일치시켰다.
+
+두 파일의 `node --check`, 헤더의 버전·URL 일치 정적 검사, `git diff --check`는 통과했다. 이 작업에서는 commit/push, 공개 Raw 응답 확인, Tampermonkey 신규 설치/업데이트, KCU 브라우저 검증, Greasy Fork 변경을 수행하지 않았다. 승인된 게시 후 Raw 응답과 실제 신규 설치·버전 상승 업데이트를 확인해야 한다.

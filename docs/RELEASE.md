@@ -17,15 +17,20 @@ Tampermonkey 공식 배포처 소개에도 이 동기화 기능이 안내되어 
 ## B. GitHub Raw 직접 배포
 GitHub/Gist Raw `.user.js` 설치도 Tampermonkey가 안내하는 방식이다. 일반 사용자는 개발자의 폴더나 file URL 접근 권한이 필요하지 않다. [T5]
 
-예시 형식이며 OWNER/REPO/BRANCH는 자리표시자다.
+현재 공개 `main` 배포 경로는 아래와 같다. 각 스크립트의 `@updateURL`과
+`@downloadURL`은 같은 완결 Raw UserScript를 가리킨다.
 
 ```text
-https://raw.githubusercontent.com/OWNER/REPO/BRANCH/src/kcu-lecture-helper.user.js
-https://raw.githubusercontent.com/OWNER/REPO/BRANCH/src/kcu-auto-navigator.user.js
+https://raw.githubusercontent.com/krtokia/KCU_Lecture_Helper/main/src/kcu-lecture-helper.user.js
+https://raw.githubusercontent.com/krtokia/KCU_Lecture_Helper/main/src/kcu-auto-navigator.user.js
 ```
 
 @updateURL은 버전을 확인하는 위치, @downloadURL은 새 코드 다운로드 위치다. 업데이트 확인에는 @version이 필요하다. [T6]
-배포 시 실제 접근 가능한 주소와 상승한 버전으로 새 설치/업데이트 테스트를 수행한다.
+처음 설치는 위 Raw URL을 Tampermonkey에서 수동으로 연다. 이후 `main`에
+검증된 변경을 push할 때마다 두 URL과 `@version`을 함께 갱신하면, 기존
+설치본은 Tampermonkey의 업데이트 확인/자동 설치 설정에 따라 더 높은
+버전을 받을 수 있다. 게시 후에는 실제 Raw 응답, 신규 설치, 기존 버전
+상승 업데이트를 각각 확인한다.
 메타데이터 전용 .meta.js를 추가한다면 전체 소스와 버전/권한이 어긋나지 않도록 생성 방식으로 관리한다.
 
 기존 Greasy Fork 설치자는 기존 주소를 계속 확인할 수 있다. 완전 이전에는 기존 배포처의 전환 안내/메타데이터 갱신과 실제 업데이트 경로 확인이 별도로 필요하다.

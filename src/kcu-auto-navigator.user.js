@@ -2,10 +2,12 @@
 // @name         KCU Auto Navigator POC 3.1
 // @name:ko      KCU 자동수강 Navigator POC 3.1
 // @namespace    kcu-lecture-helper
-// @version      0.3.1
+// @version      0.3.2
 // @description  현재 과목 한 차시만 재생: 종료 후보·탭 상태 기록, 종료 후 출석 재조회
 // @author       krtokia
 // @license      MIT
+// @updateURL    https://raw.githubusercontent.com/krtokia/KCU_Lecture_Helper/main/src/kcu-auto-navigator.user.js
+// @downloadURL  https://raw.githubusercontent.com/krtokia/KCU_Lecture_Helper/main/src/kcu-auto-navigator.user.js
 // @match        https://lms.kcu.ac/atnlcSubj/lectRoom*
 // @match        https://mvapi.kcu.ac/*
 // @run-at       document-start
@@ -54,7 +56,7 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.3.1';
+    const VERSION = '0.3.2';
     const CHANNEL = 'KCU_POC31_DIAGNOSTICS_V1';
     const LMS_ORIGIN = 'https://lms.kcu.ac';
     const PLAYER_ORIGIN = 'https://mvapi.kcu.ac';
