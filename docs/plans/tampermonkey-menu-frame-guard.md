@@ -36,5 +36,7 @@ media behavior are preserved.
 
 On 2026-09-09, menu registration was guarded with
 `window.top === window.self`; loading stored settings remains in every frame.
-The Helper passed `node --check`, commit `560913b` was pushed, and its public
-Raw source was checked for the guard.
+The Helper passed `node --check`; commits `560913b` and `6322ce1` were pushed,
+the latter raising Helper to `1.0.2` so existing installations can identify the
+fix. GitHub's Contents API confirmed the public `main` source has the version
+and guard.
