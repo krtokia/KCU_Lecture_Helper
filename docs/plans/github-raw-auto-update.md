@@ -64,5 +64,6 @@ modifying the Greasy Fork listing, or browser-based Tampermonkey installation.
 - Bumped Helper to `1.0.1`; bumped Navigator metadata and runtime `VERSION` to
   `0.3.2`.
 - `node --check` passed for both scripts, as did a static header check for the
-  versions, matching URLs, and Navigator runtime version. No commit, push,
-  Raw-response fetch, or Tampermonkey browser test was performed.
+  versions, matching URLs, and Navigator runtime version. Commit `42937a6` was
+  pushed, and both public Raw URLs returned the expected new version headers.
+  Tampermonkey browser testing remains pending.

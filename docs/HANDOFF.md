@@ -79,4 +79,4 @@ C. 실제 Navigator 기준 소스에서 3.1 요구와 차이를 비교 → 별�
 ## 8. 2026-09-09 GitHub Raw 자동 업데이트 메타데이터
 두 UserScript의 `@updateURL`과 `@downloadURL`을 각각 같은 공개 GitHub Raw `main` 소스 주소로 추가했다. Helper는 1.0.1, Navigator는 0.3.2로 patch 버전을 올렸고 Navigator의 런타임 VERSION도 0.3.2로 일치시켰다.
 
-두 파일의 `node --check`, 헤더의 버전·URL 일치 정적 검사, `git diff --check`는 통과했다. 이 작업에서는 commit/push, 공개 Raw 응답 확인, Tampermonkey 신규 설치/업데이트, KCU 브라우저 검증, Greasy Fork 변경을 수행하지 않았다. 승인된 게시 후 Raw 응답과 실제 신규 설치·버전 상승 업데이트를 확인해야 한다.
+두 파일의 `node --check`, 헤더의 버전·URL 일치 정적 검사, `git diff --check`를 통과했다. 커밋 `42937a6`을 push했고 공개 Raw 응답에서 두 새 버전 헤더를 확인했다. Tampermonkey 신규 설치/업데이트와 KCU 브라우저 검증, Greasy Fork 변경은 미수행이다.
