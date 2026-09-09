@@ -1,0 +1,25 @@
+# Private originals and browser data
+.local/
+private/
+backups/
+reports/raw/
+logs/
+*.log
+*.har
+.env
+.env.*
+!.env.example
+*.local.json
+*.local.user.js
+storage-state*.json
+cookies*.json
+
+# Generated files and tools
+node_modules/
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
