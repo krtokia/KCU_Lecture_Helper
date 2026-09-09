@@ -31,3 +31,10 @@ media behavior are preserved.
 - One top-level Helper menu registration is made per page.
 - Matching iframe executions retain their existing Helper behavior.
 - Helper syntax and public Raw response are verified after push.
+
+## Implementation outcome
+
+On 2026-09-09, menu registration was guarded with
+`window.top === window.self`; loading stored settings remains in every frame.
+The Helper passed `node --check`, commit `560913b` was pushed, and its public
+Raw source was checked for the guard.
