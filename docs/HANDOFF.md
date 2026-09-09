@@ -14,7 +14,7 @@
 | 업데이트 문제 | 제공된 1.0.1에 @downloadURL none이 들어갔다. 사용자는 자신의 배포본 업데이트를 막는 것에 이의를 제기했다. 조용히 유지하거나 배포하면 안 된다. |
 | Navigator POC 3 | 2026-09-08 리포트에 scriptVersion 0.3.0, phase PLAYING, finishedAt/result null. 실제 playing 확인은 있지만 해당 리포트는 완료 검증 결과가 아니다. |
 | Navigator POC 3.1 | `src/kcu-auto-navigator.user.js`에 0.3.1 내보낸 소스를 로컬 이관했다. 파일 존재는 사용자 전달·설치·실행 성공을 뜻하지 않는다. |
-| 현재 로컬 배포 소스 | Helper 1.0.1과 Navigator 0.3.2에 GitHub Raw `main`의 동일한 `@updateURL`/`@downloadURL`을 추가했다. Navigator 런타임 VERSION도 0.3.2로 맞췄다. 실제 Tampermonkey 설치본과의 일치 및 KCU 동작은 미검증이다. |
+| 현재 로컬 배포 소스 | Helper 1.0.2와 Navigator 0.3.2에 GitHub Raw `main`의 동일한 `@updateURL`/`@downloadURL`을 추가했다. Navigator 런타임 VERSION도 0.3.2로 맞췄다. 실제 Tampermonkey 설치본과의 일치 및 KCU 동작은 미검증이다. |
 | 원격 저장소 | 공개 `krtokia/KCU_Lecture_Helper`, 기본 브랜치 `main`. GitHub Raw 자동 업데이트 메타데이터를 사용하며 실제 Tampermonkey 업데이트는 미검증. |
 
 Helper 교체는 Navigator 업그레이드가 아니다. 이전의 “이미 받은 3.1을 실행” 안내를 사실로 이어받지 않는다. [P1, P2, P4, P5]

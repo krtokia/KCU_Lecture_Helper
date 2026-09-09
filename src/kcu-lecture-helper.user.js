@@ -2,7 +2,7 @@
 // @name KCU Lecture Helper
 // @name:ko KCU 강의 도우미 - 자동 배속 / 중지 / 종료 알림
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description KCU 온라인 강의 자동 배속 및 재생 중지/종료 알림
 // @author       krtokia@gmail.com
 // @license      MIT
