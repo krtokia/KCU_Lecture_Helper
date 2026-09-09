@@ -85,3 +85,12 @@ endpoint and enabled state. The menu can set or clear the endpoint and toggle
 the enabled state; an empty or invalid value is never sent.  The static checks
 in this task cover syntax and source-level guards only, not Tampermonkey menu
 persistence or authenticated KCU playback.
+
+## Release outcome (2026-09-09)
+
+The old private GitHub repository was deleted after a local Git bundle backup
+was created under ignored `.local/git-backups/`. A new public
+`krtokia/KCU_Lecture_Helper` repository with the same name was created and its
+single clean `main` commit was pushed. A source and full new-history search
+found no prior endpoint identifier; Tampermonkey/KCU runtime verification
+remains pending.

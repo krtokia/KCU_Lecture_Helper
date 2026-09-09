@@ -26,4 +26,4 @@ GitHub 소스 관리, 로컬 파일 추적, 배포 업데이트는 별개입니�
 - `docs/TEST_CHECKLIST.md`: 검증 항목
 - `docs/SOURCES.md`: 근거와 확인 범위
 
-작성 과정에서 브라우저 설정, 설치된 스크립트, Greasy Fork 게시물은 변경하지 않았습니다. 비공개 GitHub 저장소 생성과 `main` push는 수행했으며, Node 문법 검사는 기록했습니다. 실제 KCU 동작은 새로 테스트하지 않았습니다.
+작성 과정에서 브라우저 설정, 설치된 스크립트, Greasy Fork 게시물은 변경하지 않았습니다. 이전 private 이력은 공개하지 않고 새 public GitHub 저장소의 깨끗한 `main`에 push했으며, Node 문법 검사는 기록했습니다. 실제 KCU 동작은 새로 테스트하지 않았습니다.

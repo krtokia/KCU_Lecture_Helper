@@ -15,7 +15,7 @@
 | Navigator POC 3 | 2026-09-08 리포트에 scriptVersion 0.3.0, phase PLAYING, finishedAt/result null. 실제 playing 확인은 있지만 해당 리포트는 완료 검증 결과가 아니다. |
 | Navigator POC 3.1 | `src/kcu-auto-navigator.user.js`에 0.3.1 내보낸 소스를 로컬 이관했다. 파일 존재는 사용자 전달·설치·실행 성공을 뜻하지 않는다. |
 | 현재 설치본 | Helper 1.0.0과 Navigator 0.3.1 내보낸 소스를 로컬 이관했다. 실제 Tampermonkey 설치본과의 일치 및 KCU 동작은 미검증이다. |
-| 원격 저장소 | 비공개 `krtokia/KCU_Lecture_Helper`, 기본 브랜치 `main`. GitHub 추적용이며 공개 배포/자동 업데이트는 미구성. |
+| 원격 저장소 | 공개 `krtokia/KCU_Lecture_Helper`, 기본 브랜치 `main`. GitHub 추적용이며 자동 업데이트는 미구성. |
 
 Helper 교체는 Navigator 업그레이드가 아니다. 이전의 “이미 받은 3.1을 실행” 안내를 사실로 이어받지 않는다. [P1, P2, P4, P5]
 

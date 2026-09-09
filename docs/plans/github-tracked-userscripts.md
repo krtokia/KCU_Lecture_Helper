@@ -90,6 +90,8 @@ Completed as designed on 2026-09-09: the two imported files were renamed,
 Helper now uses one top-level `NTFY_ENDPOINT` constant with its prior value,
 and its Greasy Fork update metadata was removed. The working tree passed
 `node --check` for both scripts and Git's staged-diff whitespace check.
-`krtokia/KCU_Lecture_Helper` was created as a private repository, configured
-as HTTPS `origin`, and `main` was pushed. The existing Greasy Fork listing and
-KCU/Tampermonkey runtime were not changed or browser-tested.
+`krtokia/KCU_Lecture_Helper` was initially created as a private repository and
+configured as HTTPS `origin`. It was later replaced by a clean public repository
+after the personal endpoint was removed; see `public-userscript-release.md`.
+The existing Greasy Fork listing and KCU/Tampermonkey runtime were not changed
+or browser-tested.

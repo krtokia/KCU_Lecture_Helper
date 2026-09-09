@@ -5,7 +5,7 @@
 처음부터 번들러/Actions/서버를 필수로 추가하지 않는다. 기본 브랜치 Raw 주소를 배포한다면 그 브랜치에는 검증된 변경만 병합한다.
 Navigator는 POC라는 사실을 명시하고 안정판으로 표현하지 않는다.
 
-현재 이관본은 `src/kcu-lecture-helper.user.js`와 `src/kcu-auto-navigator.user.js`에 있으며, 비공개 GitHub 저장소 `krtokia/KCU_Lecture_Helper`의 `main`에 추적한다. Helper는 개인 ntfy 값을 소스에 두지 않고 Tampermonkey 로컬 저장소에서만 읽는다. 기존 Greasy Fork 게시물은 변경하지 않았다.
+현재 이관본은 `src/kcu-lecture-helper.user.js`와 `src/kcu-auto-navigator.user.js`에 있으며, 공개 GitHub 저장소 `krtokia/KCU_Lecture_Helper`의 `main`에 추적한다. Helper는 개인 ntfy 값을 소스에 두지 않고 Tampermonkey 로컬 저장소에서만 읽는다. 기존 Greasy Fork 게시물은 변경하지 않았다.
 
 ## A. Greasy Fork 배포 유지
 사용자 원본 Helper에는 Greasy Fork 업데이트 주소가 있었다. 로컬 이관본의 UserScript 헤더에서는 `@downloadURL`과 `@updateURL`만 제거했으며, 이는 기존 Greasy Fork 게시물의 주소·동기화·게시 상태를 변경하거나 검증한 것이 아니다. 기존 설치본의 업데이트 경로를 GitHub로 전환하려면 별도 승인, 실제 배포 주소, 버전 상승 및 업데이트 테스트가 필요하다. [P1]
