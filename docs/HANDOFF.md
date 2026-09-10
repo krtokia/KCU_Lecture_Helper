@@ -93,3 +93,14 @@ Helper를 `1.0.3`으로 올렸다. Tampermonkey 메뉴에 `ntfy 상태 확인`�
 `@version 1.0.3`과 기존 GitHub Raw 업데이트 URL을 확인했다. Orca 내장
 브라우저에는 Tampermonkey/KCU 로그인 탭이 없어 실제 확장 메뉴 클릭과 저장 후
 새로고침 검증은 미수행이다. Greasy Fork 게시는 수행하지 않았다.
+
+## 10. 2026-09-10 상태 창의 ntfy 주소 표시
+
+사용자 요청으로 Helper `1.0.4`는 `ntfy 상태 확인` 및 설정 변경 후 확인창에
+저장된 ntfy 주소 자체를 표시한다. 이 값은 사용자가 직접 연 로컬 확인창에만
+표시하며, 메뉴 라벨·콘솔·소스·문서에는 넣지 않는다. 빈 주소는 `설정 안 됨`으로
+표시한다.
+
+두 UserScript의 `node --check`, `git diff --check`, GM API 모의 상태 확인창
+검사를 통과했다. 실제 Tampermonkey/KCU 브라우저 검증과 1.0.4 GitHub Raw
+배포 확인은 아직 수행하지 않았다.

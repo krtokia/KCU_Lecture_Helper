@@ -2,7 +2,7 @@
 // @name KCU Lecture Helper
 // @name:ko KCU 강의 도우미 - 자동 배속 / 중지 / 종료 알림
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      1.0.4
 // @description KCU 온라인 강의 자동 배속 및 재생 중지/종료 알림
 // @author       krtokia@gmail.com
 // @license      MIT
@@ -128,13 +128,11 @@
 
     function ntfyStatusText() {
 
-        const endpointConfigured = Boolean(
-            normalizeNtfyEndpoint(CONFIG.ntfy.url)
-        );
+        const endpoint = normalizeNtfyEndpoint(CONFIG.ntfy.url);
 
         return (
             `ntfy 알림: ${CONFIG.ntfy.enabled ? '켜짐' : '꺼짐'}\n` +
-            `주소: ${endpointConfigured ? '설정됨' : '설정 안 됨'}`
+            `주소: ${endpoint || '설정 안 됨'}`
         );
     }
 
