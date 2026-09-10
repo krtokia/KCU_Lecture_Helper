@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name KCU Lecture Helper
-// @name:ko KCU 강의 도우미 - 자동 배속 / 중지 / 종료 알림
+// @name:ko KCU 학습 도우미
 // @namespace    http://tampermonkey.net/
-// @version      1.1.0
-// @description KCU 온라인 강의 자동 배속 및 재생 중지/종료 알림
+// @version      1.1.1
+// @description KCU 온라인 강의 재생 설정과 중지·종료 알림
 // @author       krtokia@gmail.com
 // @license      MIT
 // @updateURL    https://raw.githubusercontent.com/krtokia/KCU_Lecture_Helper/main/src/kcu-lecture-helper.user.js
@@ -26,7 +26,7 @@
 (function () {
     'use strict';
 
-    const VERSION = '1.1.0';
+    const VERSION = '1.1.1';
 
     const DIAGNOSTIC_STORAGE_KEY =
         'kcuLectureHelperAutoResumeDiagnostics';
@@ -516,26 +516,26 @@
 
     function registerMenu() {
 
-        addMenuCommand('KCU Helper: ntfy 주소 설정/지우기', configureNtfyEndpoint);
+        addMenuCommand('KCU 학습 도우미 · 알림 설정', configureNtfyEndpoint);
 
         const playbackEnabledText = CONFIG.playback.enabled ? '켜짐' : '꺼짐';
         const playbackNextText = CONFIG.playback.enabled ? '꺼짐' : '켜짐';
         addMenuCommand(
-            `KCU Helper: 자동 배속 현재 ${playbackEnabledText} (클릭하면 ${playbackNextText})`,
+            `KCU 학습 도우미 · 재생 속도 ${playbackEnabledText} → ${playbackNextText}`,
             togglePlaybackEnabled
         );
 
         const autoMuteEnabledText = CONFIG.mute.enabled ? '켜짐' : '꺼짐';
         const autoMuteNextText = CONFIG.mute.enabled ? '꺼짐' : '켜짐';
         addMenuCommand(
-            `KCU Helper: 자동 소리 끄기 현재 ${autoMuteEnabledText} (클릭하면 ${autoMuteNextText})`,
+            `KCU 학습 도우미 · 자동 음소거 ${autoMuteEnabledText} → ${autoMuteNextText}`,
             toggleAutoMuteEnabled
         );
 
         const autoResumeEnabledText = CONFIG.autoResume.enabled ? '켜짐' : '꺼짐';
         const autoResumeNextText = CONFIG.autoResume.enabled ? '꺼짐' : '켜짐';
         addMenuCommand(
-            `KCU Helper: 비의도적 중지 자동 재개 현재 ${autoResumeEnabledText} (클릭하면 ${autoResumeNextText})`,
+            `KCU 학습 도우미 · 중단 시 자동 재개 ${autoResumeEnabledText} → ${autoResumeNextText}`,
             toggleAutoResumeEnabled
         );
 

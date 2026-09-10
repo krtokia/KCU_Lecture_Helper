@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         KCU Auto Navigator Beta
-// @name:ko      KCU 자동수강 Navigator Beta
+// @name         KCU Course Navigator
+// @name:ko      KCU 학습 진행 도우미
 // @namespace    kcu-lecture-helper
-// @version      0.4.0
+// @version      0.4.1
 // @description  첫 과목부터 전체 미수강 차시를 실제 종료·출석 확인 뒤 순차 진행
 // @author       krtokia
 // @license      MIT
@@ -21,14 +21,13 @@
 
 /*
  * 설치 / 사용
- * 1. 이전 Navigator POC는 모두 비활성화한다. 기존 Lecture Helper는 그대로 둔다.
+ * 1. 이전 Navigator 설치본은 모두 비활성화한다. 기존 Lecture Helper는 그대로 둔다.
  * 2. 이 전체 코드를 새 Tampermonkey 스크립트로 저장하고 강의실을 한 번 새로고침한다.
- * 3. 영상을 재생하지 않은 상태에서 메뉴의 "KCU Navigator Beta 시작".
- * 4. 결과는 "리포트 복사" 또는 "리포트 파일 저장"으로 전달한다.
+ * 3. 영상을 재생하지 않은 상태에서 메뉴의 "KCU 학습 진행 · 시작".
+ * 4. 결과는 "실행 기록 복사" 또는 "실행 기록 저장"으로 전달한다.
  *
- * 범위: LNB 첫 과목부터. 첫 미수강 과목의 첫 영상 하나만 실제 재생까지 확인.
- *       다음 영상의 종료·출석 확인, 세 번째 차시 및 다른 과목 이동은 하지 않는다.
- * 정지: POC의 대기/예약 동작만 취소한다. 영상 자체는 일시정지하지 않는다.
+ * 범위: LNB 첫 과목부터 모든 적격 미수강 영상의 실제 종료·출석 확인까지 순차 진행한다.
+ * 정지: 진행 대기/예약 동작만 취소한다. 영상 자체는 일시정지하지 않는다.
  * 새로고침: 이전 실행을 중단 처리한다. 자동 재시작하지 않는다.
  *
  * 종료:
@@ -57,7 +56,7 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.4.0';
+    const VERSION = '0.4.1';
     const CHANNEL = 'KCU_NAVIGATOR_BETA_V1';
     const LMS_ORIGIN = 'https://lms.kcu.ac';
     const PLAYER_ORIGIN = 'https://mvapi.kcu.ac';
@@ -1190,12 +1189,12 @@
         }
 
         // 최소 UI: 경고창 없이 Tampermonkey 메뉴만 사용한다.
-        GM_registerMenuCommand('KCU Navigator Beta 시작 - 첫 과목부터 연속 진행', start);
-        GM_registerMenuCommand('KCU Navigator Beta 정지 - 영상은 유지', () => stop());
-        GM_registerMenuCommand('KCU Navigator Beta 상태/리포트 출력', printReport);
-        GM_registerMenuCommand('KCU Navigator Beta 리포트 복사', copyReport);
-        GM_registerMenuCommand('KCU Navigator Beta 리포트 파일 저장', downloadReport);
-        GM_registerMenuCommand('KCU Navigator Beta 상태 초기화', () => {
+        GM_registerMenuCommand('KCU 학습 진행 · 시작', start);
+        GM_registerMenuCommand('KCU 학습 진행 · 중지 (영상 유지)', () => stop());
+        GM_registerMenuCommand('KCU 학습 진행 · 상태 보기', printReport);
+        GM_registerMenuCommand('KCU 학습 진행 · 실행 기록 복사', copyReport);
+        GM_registerMenuCommand('KCU 학습 진행 · 실행 기록 저장', downloadReport);
+        GM_registerMenuCommand('KCU 학습 진행 · 기록 초기화', () => {
             if (active || state.running) { stop('초기화 요청: 먼저 실행을 중지했습니다. 초기화 메뉴를 한 번 더 누르면 기록을 지웁니다.'); return; }
             clearTimeout(saveTimer); saveTimer = null;
             GM_deleteValue(STATE_KEY); state = defaults(); log('Navigator Beta 상태를 초기화했습니다.');
