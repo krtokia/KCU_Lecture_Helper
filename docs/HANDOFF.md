@@ -102,5 +102,6 @@ Helper를 `1.0.3`으로 올렸다. Tampermonkey 메뉴에 `ntfy 상태 확인`�
 표시한다.
 
 두 UserScript의 `node --check`, `git diff --check`, GM API 모의 상태 확인창
-검사를 통과했다. 실제 Tampermonkey/KCU 브라우저 검증과 1.0.4 GitHub Raw
-배포 확인은 아직 수행하지 않았다.
+검사를 통과했다. 커밋 `1be5780`을 GitHub `main`에 push했고 공개 Raw 응답에서
+`@version 1.0.4`와 기존 GitHub Raw 업데이트 URL을 확인했다. 실제
+Tampermonkey/KCU 브라우저 검증은 아직 수행하지 않았다.

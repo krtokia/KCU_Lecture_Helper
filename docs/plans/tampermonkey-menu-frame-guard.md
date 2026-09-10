@@ -129,5 +129,6 @@ remains pending.
 
 The release commits `949fb26` and `c8d196f` were pushed to GitHub `main`. The
 public Raw UserScript returned `@version 1.0.3` and the unchanged GitHub Raw
-`@updateURL`/`@downloadURL`. The `1.0.4` follow-up is pending its own release
-verification. Greasy Fork was not changed.
+`@updateURL`/`@downloadURL`. Commit `1be5780` subsequently released `1.0.4`;
+its public Raw response returned that version and the same URLs. Greasy Fork
+was not changed.
