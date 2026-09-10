@@ -119,3 +119,7 @@ Node-based GM API mock verified the initial off label, persisted on label,
 immediate toggle confirmation, configured-endpoint summary, and absence of the
 test endpoint text from menu labels. Orca's embedded browser had no open tab or
 Tampermonkey/KCU login session, so extension UI verification remains pending.
+
+The release commit `949fb26` was pushed to GitHub `main`. The public Raw
+UserScript returned `@version 1.0.3` and the unchanged GitHub Raw
+`@updateURL`/`@downloadURL`. Greasy Fork was not changed.

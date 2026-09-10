@@ -89,6 +89,7 @@ Helper를 `1.0.3`으로 올렸다. Tampermonkey 메뉴에 `ntfy 상태 확인`�
 확인창을 띄운다. 실제 주소는 표시·로그하지 않는다.
 
 두 UserScript의 `node --check`, `git diff --check`, GM API 모의 상태 전환 검사를
-통과했다. Orca 내장 브라우저에는 Tampermonkey/KCU 로그인 탭이 없어 실제 확장
-메뉴 클릭과 저장 후 새로고침 검증은 미수행이다. 원격 push나 Greasy Fork 게시도
-수행하지 않았다.
+통과했다. 커밋 `949fb26`을 GitHub `main`에 push했고, 공개 Raw 응답에서
+`@version 1.0.3`과 기존 GitHub Raw 업데이트 URL을 확인했다. Orca 내장
+브라우저에는 Tampermonkey/KCU 로그인 탭이 없어 실제 확장 메뉴 클릭과 저장 후
+새로고침 검증은 미수행이다. Greasy Fork 게시는 수행하지 않았다.
