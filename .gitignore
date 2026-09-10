@@ -4,6 +4,7 @@ private/
 backups/
 reports/raw/
 logs/
+log/
 *.log
 *.har
 .env

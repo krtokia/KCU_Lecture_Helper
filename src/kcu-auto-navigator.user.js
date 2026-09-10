@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         KCU Auto Navigator POC 3.1
-// @name:ko      KCU 자동수강 Navigator POC 3.1
+// @name         KCU Auto Navigator POC 3.5
+// @name:ko      KCU 자동수강 Navigator POC 3.5
 // @namespace    kcu-lecture-helper
-// @version      0.3.2
-// @description  현재 과목 한 차시만 재생: 종료 후보·탭 상태 기록, 종료 후 출석 재조회
+// @version      0.3.9
+// @description  첫 과목부터 탐색해 첫 미수강 과목의 첫 차시 실제 재생만 검증
 // @author       krtokia
 // @license      MIT
 // @updateURL    https://raw.githubusercontent.com/krtokia/KCU_Lecture_Helper/main/src/kcu-auto-navigator.user.js
@@ -23,11 +23,11 @@
  * 설치 / 사용
  * 1. 이전 Navigator POC는 모두 비활성화한다. 기존 Lecture Helper는 그대로 둔다.
  * 2. 이 전체 코드를 새 Tampermonkey 스크립트로 저장하고 강의실을 한 번 새로고침한다.
- * 3. 영상을 재생하지 않은 상태에서 메뉴의 "KCU POC3.1 시작 - 현재 과목 한 차시".
+ * 3. 영상을 재생하지 않은 상태에서 메뉴의 "KCU POC3.5 시작 - 첫 과목부터 미수강 탐색".
  * 4. 결과는 "리포트 복사" 또는 "리포트 파일 저장"으로 전달한다.
  *
- * 범위: 현재 과목만. 열린 주차를 순서대로 확인하여 출석 미인정 영상 한 차시만 재생.
- *       첫 과목으로 이동하지 않으며 다음 차시/과목도 재생하지 않는다.
+ * 범위: LNB 첫 과목부터. 첫 미수강 과목의 첫 영상 하나만 실제 재생까지 확인.
+ *       다음 영상의 종료·출석 확인, 세 번째 차시 및 다른 과목 이동은 하지 않는다.
  * 정지: POC의 대기/예약 동작만 취소한다. 영상 자체는 일시정지하지 않는다.
  * 새로고침: 이전 실행을 중단 처리한다. 자동 재시작하지 않는다.
  *
@@ -36,6 +36,7 @@
  * - 실제 video.currentTime이 duration 끝 2초 이내인 상태가 2초 이상 관측됨.
  * - pause가 끝부분에서 발생한 경우도 위의 끝부분 후보로 처리한다.
  * - 후보 후 최소 10초 대기하고 위치를 다시 확인한 다음 같은 주차 UI를 재조회한다.
+ * - 끝부분이 아닌 실제 pause는 종료로 취급하지 않고, 실제 playing 재개 신호까지 기다린다.
  * - KCU callFunction 메시지는 수동적으로 기록만 한다. 미확인 상태코드를 종료로 간주하지 않는다.
  * - 출석 Y는 출석 인정이지 영상 전체 시청 증명이 아니다. fallback 결과는 따로 표시한다.
  *
@@ -56,18 +57,22 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.3.2';
-    const CHANNEL = 'KCU_POC31_DIAGNOSTICS_V1';
+    const VERSION = '0.3.9';
+    const CHANNEL = 'KCU_POC35_COURSE_SCAN_V1';
     const LMS_ORIGIN = 'https://lms.kcu.ac';
     const PLAYER_ORIGIN = 'https://mvapi.kcu.ac';
-    const STATE_KEY = 'kcuNavigatorPoc31State';
-    const TAG = '[KCU POC3.1]';
+    const STATE_KEY = 'kcuNavigatorPoc35State';
+    const HANDOFF_KEY = 'kcuNavigatorPoc35CourseHandoff';
+    const TAG = '[KCU POC3.5]';
     const WEEK_API = '/common/lect/selectWeekLectInfo';
     const CONFIG = Object.freeze({
         initialTimeoutMs: 30000,
         weekTimeoutMs: 20000,
         playingTimeoutMs: 45000,
+        manualResumeTimeoutMs: 5 * 60 * 1000,
+        manualPauseMinPlaybackSec: 10,
         observationTimeoutMs: 8 * 60 * 60 * 1000,
+        courseNavigationTimeoutMs: 10 * 60 * 1000,
         endMarginSec: 2,
         nearEndHoldMs: 2000,
         attendanceDelayMs: 10000,
@@ -79,7 +84,8 @@
         signalSilenceFailureMs: 180000,
         maxEvents: 600,
         maxSamples: 360,
-        maxRpcEvents: 180
+        maxRpcEvents: 180,
+        maxTimelineEvents: 5000
     });
 
     const $ = (selector, root = document) => root.querySelector(selector);
@@ -199,6 +205,31 @@
             if (!info || !video.isConnected) return;
             post(kind, { videoId: info.id, video: mediaSnapshot(video) });
         }
+        function timeline(kind, details = {}) {
+            post('timeline', { timeline: { source: 'iframe', event: kind, ...details } });
+        }
+        function timelineVideo(kind, video, event) {
+            const info = attached.get(video);
+            if (!info || !video.isConnected) return;
+            const now = Date.now();
+            if (kind === 'timeupdate') {
+                if (now - info.lastTimelineTimeAt < 1000) return;
+                info.lastTimelineTimeAt = now;
+            }
+            post('timeline', {
+                videoId: info.id,
+                video: mediaSnapshot(video),
+                timeline: { source: 'media', event: kind, trusted: event?.isTrusted === true }
+            });
+        }
+        function targetKind(target) {
+            if (!(target instanceof Element)) return 'other';
+            if (target.closest('video')) return 'video';
+            if (target.closest('button')) return 'button';
+            if (target.closest('input, select, textarea')) return 'form';
+            if (target.closest('a')) return 'link';
+            return target.tagName.toLowerCase();
+        }
         function sampleAll(kind = 'sample', force = false) {
             const now = Date.now();
             if (!token || (!force && now - lastSampleAt < 1000)) return;
@@ -213,13 +244,16 @@
         }
         function attach(video) {
             if (attached.has(video)) return;
-            attached.set(video, { id: `video-${++videoSeq}`, waitingEvents: 0, stalledEvents: 0 });
+            attached.set(video, { id: `video-${++videoSeq}`, waitingEvents: 0, stalledEvents: 0, lastTimelineTimeAt: 0 });
             knownVideos.add(video);
-            const events = ['loadedmetadata', 'playing', 'pause', 'ended', 'error', 'seeking', 'seeked', 'ratechange', 'emptied'];
-            for (const kind of events) video.addEventListener(kind, () => sendVideo(kind, video));
-            video.addEventListener('timeupdate', () => sampleAll());
-            video.addEventListener('waiting', () => { attached.get(video).waitingEvents++; });
-            video.addEventListener('stalled', () => { attached.get(video).stalledEvents++; });
+            const events = ['loadstart', 'loadedmetadata', 'loadeddata', 'canplay', 'play', 'playing', 'pause', 'ended', 'error', 'seeking', 'seeked', 'ratechange', 'emptied', 'waiting', 'stalled', 'suspend'];
+            for (const kind of events) video.addEventListener(kind, (event) => {
+                if (kind === 'waiting') attached.get(video).waitingEvents++;
+                if (kind === 'stalled') attached.get(video).stalledEvents++;
+                timelineVideo(kind, video, event);
+                sendVideo(kind, video);
+            });
+            video.addEventListener('timeupdate', (event) => { timelineVideo('timeupdate', video, event); sampleAll(); });
             sendVideo('attached', video);
         }
         function scan(root = document) {
@@ -239,9 +273,19 @@
             scan();
             sampleAll('snapshot', true);
         });
-        document.addEventListener('visibilitychange', () => { post('visibilitychange'); sampleAll('snapshot', true); });
-        window.addEventListener('focus', () => post('focus'));
-        window.addEventListener('blur', () => post('blur'));
+        document.addEventListener('visibilitychange', () => {
+            timeline('visibilitychange', { visibility: document.visibilityState, focused: document.hasFocus() });
+            post('visibilitychange'); sampleAll('snapshot', true);
+        });
+        window.addEventListener('focus', () => { timeline('focus', { focused: true }); post('focus'); });
+        window.addEventListener('blur', () => { timeline('blur', { focused: false }); post('blur'); });
+        for (const kind of ['pointerdown', 'pointerup', 'click', 'keydown']) {
+            document.addEventListener(kind, (event) => timeline(kind, {
+                source: 'input', trusted: event.isTrusted === true, target: targetKind(event.target),
+                button: typeof event.button === 'number' ? event.button : null,
+                hasCoordinates: Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+            }), true);
+        }
         const observer = new MutationObserver((mutations) => {
             for (const mutation of mutations) for (const node of mutation.addedNodes) scan(node);
         });
@@ -259,13 +303,20 @@
     // 최상위 LMS: 한 차시 POC 제어 + 보고서
     // ============================================================
     function installController() {
+        function playerDefaults() {
+            return { firstPlaying: null, latestPlaying: null, latest: null, nativeEnded: null, frameChanges: 0 };
+        }
         function defaults() {
             return {
                 version: VERSION, runId: null, running: false, phase: 'IDLE',
                 startedAt: null, finishedAt: null, target: null, result: null, lastError: null,
-                player: { firstPlaying: null, latestPlaying: null, latest: null, nativeEnded: null, frameChanges: 0 },
+                player: playerDefaults(),
+                manualPauseTest: { nonEndPause: null, resume: null },
                 endCandidate: null, verificationAttempts: [], events: [], samples: [], rpc: [],
-                eventCounts: {}, dropped: { events: 0, samples: 0, rpc: 0 }
+                transition: { firstTarget: null, firstEndCandidate: null, firstAttendance: null, firstManualPauseTest: null,
+                    nextTarget: null, nextSelection: null, nextClick: null, nextPlaying: null, terminalAction: null },
+                courseScan: { index: null, total: null, visited: [], handoff: null, targetPlaying: null },
+                timeline: [], timelineSequence: 0, eventCounts: {}, dropped: { events: 0, samples: 0, rpc: 0, timeline: 0 }
             };
         }
         let state = { ...defaults(), ...GM_getValue(STATE_KEY, {}) };
@@ -300,6 +351,10 @@
         function record(type, details = {}) {
             bounded('events', { at: iso(), type, ...details }, CONFIG.maxEvents);
             state.eventCounts[type] = (state.eventCounts[type] || 0) + 1;
+            persist();
+        }
+        function recordTimeline(entry) {
+            bounded('timeline', { sequence: ++state.timelineSequence, ...entry }, CONFIG.maxTimelineEvents);
             persist();
         }
         function phase(value) {
@@ -452,12 +507,12 @@
                 const lib = page.jQuery;
                 if (typeof lib !== 'function' || typeof lib.fn?.on !== 'function') return false;
                 jq = lib;
-                lib(page.document).on('ajaxSend.kcuPoc31', (e, xhr, settings) => {
+                lib(page.document).on('ajaxSend.kcuPoc35', (e, xhr, settings) => {
                     if (apiPath(settings) !== WEEK_API) return;
                     const entry = { id: ++requestSeq, requestedAt: Date.now(), key: requestIdentity(settings) };
                     requestMap.set(xhr, entry); pendingWeekIds.add(entry.id);
                 });
-                lib(page.document).on('ajaxComplete.kcuPoc31', (e, xhr, settings) => {
+                lib(page.document).on('ajaxComplete.kcuPoc35', (e, xhr, settings) => {
                     if (apiPath(settings) !== WEEK_API) return;
                     try {
                         const req = requestMap.get(xhr) || { id: ++requestSeq, requestedAt: null, key: requestIdentity(settings) };
@@ -549,6 +604,115 @@
             return null;
         }
 
+        function courseLinks() {
+            return $$('#lnb li.subjLnb > a[data-cose-cd]').map((link, index) => ({
+                index, coseCd: scalar(link.dataset.coseCd).trim(), title: text(link), link
+            })).filter((item) => item.coseCd);
+        }
+        function publicCourse(c) { return { coseCd: scalar(c?.coseCd), title: scalar(c?.title).slice(0, 240) }; }
+        function clearHandoff() { try { GM_deleteValue(HANDOFF_KEY); } catch (_) {} }
+        function readHandoff() {
+            try {
+                const h = GM_getValue(HANDOFF_KEY, null);
+                if (!h || typeof h !== 'object' || typeof h.runId !== 'string' || !Number.isInteger(h.nextIndex) ||
+                    !scalar(h.expectedCoseCd) || !Number.isFinite(h.createdAt) || Date.now() - h.createdAt > CONFIG.courseNavigationTimeoutMs) return null;
+                return h;
+            } catch (_) { return null; }
+        }
+        async function navigateToCourse(ctx, entry) {
+            const from = assertCourse();
+            if (from.coseCd === entry.coseCd) throw new Error('다음 과목 식별값이 현재 과목과 같습니다.');
+            const handoff = { runId: state.runId, nextIndex: entry.index, expectedCoseCd: entry.coseCd, phase: 'COURSE_SCAN', createdAt: Date.now() };
+            state.courseScan.handoff = { nextIndex: entry.index, expectedCoseCd: entry.coseCd, createdAt: handoff.createdAt };
+            state.courseScan.index = entry.index;
+            phase('NAVIGATE_NEXT_COURSE');
+            record('COURSE_NAVIGATION_REQUESTED', { from: publicCourse(from), to: { index: entry.index, ...publicCourse(entry) } });
+            persist(true); GM_setValue(HANDOFF_KEY, handoff);
+            ctx.navigating = true;
+            entry.link.click();
+            await waitFor(() => false, 15000, '다음 과목 페이지 이동을 확인하지 못했습니다.', ctx);
+        }
+        async function playCourseTarget(ctx, target) {
+            state.target = target; assertTarget(ctx);
+            state.courseScan.target = clone(target);
+            phase('WAIT_TARGET_PLAYING');
+            const button = $$('#videoInfoBody button.btnVideo').find((item) =>
+                lectureNumber(item.dataset.lectNo) === target.lecture.lectNo &&
+                scalar(item.dataset.atenYn) === 'N' && scalar(item.dataset.vdoFlag) === 'Y');
+            if (!button) throw new Error('첫 미수강 차시의 현재 DOM 재생 버튼/상태를 확인하지 못했습니다.');
+            ctx.clickedAt = Date.now(); ctx.lastMatchingMediaAt = ctx.clickedAt; ctx.lastProgressAt = ctx.clickedAt;
+            record('TARGET_LECTURE_BUTTON_CLICK', { weekNo: target.week.weekNo, lectNo: target.lecture.lectNo, buttonClass: button.className });
+            button.click(); signalPlayer('sample', ctx);
+            await waitFor(() => {
+                assertTarget(ctx);
+                if (ctx.mediaFailure) throw new Error(ctx.mediaFailure);
+                return ctx.hasPlayed;
+            }, CONFIG.playingTimeoutMs, '첫 미수강 차시의 실제 재생 시작을 확인하지 못했습니다.', ctx);
+            state.courseScan.targetPlaying = clone(state.player.firstPlaying || state.player.latestPlaying);
+            record('FIRST_UNCOMPLETED_PLAYING_CONFIRMED', state.courseScan.targetPlaying);
+            conclude(ctx, 'PASS_FIRST_UNCOMPLETED_PLAYING', '첫 미수강 과목의 첫 적격 차시에서 실제 playing을 확인했습니다. 다음 차시·다음 과목은 재생하지 않습니다.');
+        }
+
+        function adoptCurrentPlayingTarget(ctx) {
+            const c = assertCourse();
+            const w = weeks().find((item) => item.weekNo === currentWeek()) || null;
+            const lecture = lectures().find((item) => item.current) || null;
+            const identity = ctx.preflight?.identity;
+            const video = ctx.preflight?.video;
+
+            if (!w?.open || !w.weekNo) {
+                throw new Error('현재 재생 주차가 열려 있지 않거나 식별되지 않습니다. 다른 주차를 선택하지 않고 중단합니다.');
+            }
+            if (!lecture?.lectNo || lecture.vdoFlag !== 'Y' || lecture.atenYn !== 'N') {
+                throw new Error('현재 선택 차시는 출석 N·영상 Y가 아닙니다. 다른 차시를 선택하지 않고 중단합니다.');
+            }
+            if (!sameCourse(identity, c) || identity.weekNo !== w.weekNo || identity.lectNo !== lecture.lectNo) {
+                throw new Error('현재 LMS 차시와 player iframe 식별값이 일치하지 않습니다. 다른 차시를 선택하지 않고 중단합니다.');
+            }
+            if (!video || video.paused || video.ended || video.seeking || video.currentTime === null || video.readyState === null || video.readyState < 2) {
+                throw new Error('현재 영상이 실제 재생 상태가 아닙니다. 재생 중인 차시만 인계하며 버튼을 누르지 않습니다.');
+            }
+
+            return {
+                course: c,
+                week: w,
+                lecture,
+                serverBefore: null,
+                adoptedFromCurrentPlayback: true
+            };
+        }
+
+        function eligibleNextLecture(server) {
+            return server?.atenYn === 'N' && server?.vdoFlag === 'Y';
+        }
+
+        async function findNextTarget(ctx, completed) {
+            const c = assertCourse(completed.course);
+            const orderedWeeks = weeks();
+            const completedIndex = orderedWeeks.findIndex((w) => w.weekNo === completed.week.weekNo);
+            if (completedIndex < 0) throw new Error('완료한 첫 대상 주차를 현재 과목에서 찾지 못했습니다.');
+            const completedLectureNo = Number(completed.lecture.lectNo);
+            for (let index = completedIndex; index < orderedWeeks.length; index++) {
+                requireRun(ctx);
+                const w = orderedWeeks[index];
+                if (!w.open || !w.weekNo) continue;
+                phase(`FIND_NEXT_INSPECT_WEEK_${w.weekNo}`);
+                const response = await reloadWeek(w.weekNo, c, ctx);
+                if (response.igiCd !== '2' || !response.lectures.length) continue;
+                for (const server of response.lectures) {
+                    if (!['Y', 'N'].includes(server.atenYn) || !['Y', 'N'].includes(server.vdoFlag)) {
+                        throw new Error('다음 차시의 출석/영상 상태를 해석할 수 없습니다. 추측하여 재생하지 않습니다.');
+                    }
+                    if (index === completedIndex && Number(server.lectNo) <= completedLectureNo) continue;
+                    if (!eligibleNextLecture(server)) continue;
+                    const dom = lectures().find((l) => l.lectNo === server.lectNo);
+                    if (!dom) throw new Error('다음 대상 서버 차시에 대응하는 재생 버튼이 없습니다.');
+                    return { course: c, week: w, lecture: dom, serverBefore: server };
+                }
+            }
+            return null;
+        }
+
         // ========================================================
         // 메시지: 현재 iframe/source, 정확한 origin, 실행 token, 차시 식별 검증.
         // ========================================================
@@ -611,13 +775,40 @@
                 record('PLAYER_VISIBILITY', { kind: data.kind, visibility: data.visibility, focused: data.focused === true });
                 return;
             }
-            const v = safeVideo(data.video);
-            if (!v) return;
             const identity = data.identity;
             // 시작 전 스냅샷은 재생 중인 영상을 건드리지 않기 위한 검사에만 사용한다.
-            if (!state.target) { ctx.preflight = { video: v, receivedAt: Date.now(), identity }; return; }
+            if (!state.target) {
+                const v = safeVideo(data.video);
+                if (v) ctx.preflight = { video: v, receivedAt: Date.now(), identity };
+                return;
+            }
             if (ctx.verifying || !sameTarget(identity, state.target) || !sameTarget(frameIdentity(), state.target)) return;
             if (!ctx.clickedAt || Number(data.sentAt) < ctx.clickedAt) return;
+            if (data.kind === 'timeline') {
+                const v = safeVideo(data.video);
+                const t = data.timeline;
+                const sources = ['iframe', 'media', 'input'];
+                const events = ['loadstart', 'loadedmetadata', 'loadeddata', 'canplay', 'play', 'playing', 'pause', 'ended',
+                    'error', 'seeking', 'seeked', 'ratechange', 'emptied', 'waiting', 'stalled', 'suspend', 'timeupdate',
+                    'visibilitychange', 'focus', 'blur', 'pointerdown', 'pointerup', 'click', 'keydown'];
+                if (!t || typeof t !== 'object' || !sources.includes(t.source) || !events.includes(t.event)) return;
+                recordTimeline({
+                    at: iso(), receivedAt: Date.now(), sentAt: Number(data.sentAt),
+                    playerKey: typeof data.frameId === 'string' && typeof data.videoId === 'string' ? `${data.frameId}/${data.videoId}` : null,
+                    identity: { shyr: identity.shyr, smstCd: identity.smstCd, coseCd: identity.coseCd, weekNo: identity.weekNo, lectNo: identity.lectNo },
+                    source: t.source, event: t.event, trusted: t.trusted === true,
+                    target: ['video', 'button', 'form', 'link', 'other'].includes(t.target) ? t.target : null,
+                    button: Number.isInteger(t.button) ? t.button : null,
+                    hasCoordinates: t.hasCoordinates === true,
+                    visibility: data.visibility, focused: data.focused === true,
+                    video: v ? { currentTime: v.currentTime, duration: v.duration, paused: v.paused, ended: v.ended,
+                        seeking: v.seeking, playbackRate: v.playbackRate, readyState: v.readyState,
+                        networkState: v.networkState, waitingEvents: v.waitingEvents, stalledEvents: v.stalledEvents } : null
+                });
+                return;
+            }
+            const v = safeVideo(data.video);
+            if (!v) return;
             if (typeof data.frameId !== 'string' || typeof data.videoId !== 'string') return;
             const key = `${data.frameId}/${data.videoId}`;
             if (ctx.retiredPlayers.has(key)) return;
@@ -641,6 +832,13 @@
                 if (!state.player.firstPlaying) state.player.firstPlaying = sample;
                 state.player.latestPlaying = sample;
                 record('PLAYER_PLAYING', sample);
+                // POC가 재생을 호출하지 않으므로 이 신호는 pause 뒤 실제로 재개됐다는 관찰값만 뜻한다.
+                if (ctx.manualPause && !ctx.manualResume && ctx.playerKey === ctx.manualPause.playerKey && data.kind === 'playing') {
+                    ctx.manualResume = sample;
+                    state.manualPauseTest.resume = sample;
+                    record('MANUAL_RESUME_CONFIRMED', sample);
+                    log('수동 일시정지 뒤 실제 재생 재개를 확인했습니다.');
+                }
             }
             if (ctx.lastTime === null || (v.currentTime !== null && Math.abs(v.currentTime - ctx.lastTime) > 0.15)) {
                 ctx.lastProgressAt = Date.now(); ctx.progressWarning = false;
@@ -652,6 +850,27 @@
                 persist();
             }
             if (!['sample', 'snapshot', 'attached', 'playing'].includes(data.kind)) record(`PLAYER_${String(data.kind).toUpperCase()}`, sample);
+            // ended/끝부분 pause는 기존 종료 판정에 맡긴다. 그 밖의 명시적 pause만 안전성 검증 대상으로 삼는다.
+            const nonEndPause = ctx.hasPlayed && data.kind === 'pause' && v.paused && !v.ended &&
+                !v.seeking && !v.loop && !nearEnd(v);
+            if (nonEndPause && !ctx.manualPause) {
+                if (v.currentTime < CONFIG.manualPauseMinPlaybackSec) {
+                    record('STARTUP_PAUSE_IGNORED', {
+                        currentTime: v.currentTime,
+                        minimumPlaybackSec: CONFIG.manualPauseMinPlaybackSec,
+                        sample
+                    });
+                    log('재생 시작 안정화 전 pause를 수동 일시정지로 처리하지 않습니다.');
+                } else {
+                    ctx.manualPause = sample;
+                    state.manualPauseTest.nonEndPause = sample;
+                    ctx.candidate = null;
+                    ctx.nearSince = null;
+                    record('NON_END_PAUSE_OBSERVED', sample);
+                    persist(true);
+                    log('끝부분이 아닌 일시정지를 확인했습니다. 실제 재생 재개를 기다립니다.');
+                }
+            }
             const outcome = classifyEnd(v, data.kind, ctx.hasPlayed, ctx.nearSince, Date.now());
             ctx.nearSince = outcome.nearSince;
             if (outcome.reason === 'NATIVE_ENDED') { state.player.nativeEnded = sample; ctx.nativeEvidence = sample; }
@@ -706,34 +925,92 @@
         }
         async function verifyAttendance(ctx, attempt) {
             assertTarget(ctx); ctx.verifying = true;
-            phase(`VERIFY_ATTENDANCE_${attempt}`);
-            const response = await reloadWeek(state.target.week.weekNo, state.target.course, ctx);
-            requireRun(ctx);
-            const server = response.lectures.find((x) => x.lectNo === state.target.lecture.lectNo) || null;
-            const dom = lectures().find((x) => x.lectNo === state.target.lecture.lectNo) || null;
-            const verification = { attempt, at: iso(), source: 'FRESH_UI_AJAX_RESPONSE', responseId: response.id,
-                found: !!server, atenYn: server?.atenYn ?? null, server, dom };
-            state.verificationAttempts.push(verification);
-            record('ATTENDANCE_VERIFIED', verification);
+            try {
+                phase(`VERIFY_ATTENDANCE_${attempt}`);
+                const response = await reloadWeek(state.target.week.weekNo, state.target.course, ctx);
+                requireRun(ctx);
+                const server = response.lectures.find((x) => x.lectNo === state.target.lecture.lectNo) || null;
+                const dom = lectures().find((x) => x.lectNo === state.target.lecture.lectNo) || null;
+                const verification = { attempt, at: iso(), source: 'FRESH_UI_AJAX_RESPONSE', responseId: response.id,
+                    found: !!server, atenYn: server?.atenYn ?? null, server, dom };
+                state.verificationAttempts.push(verification);
+                record('ATTENDANCE_VERIFIED', verification);
+                persist(true);
+                return verification;
+            } finally {
+                ctx.verifying = false;
+            }
+        }
+
+        function resetForNextTarget(ctx) {
+            ctx.playerKey = null;
+            ctx.retiredPlayers.clear();
+            ctx.lastSequence.clear();
+            ctx.hasPlayed = false;
+            ctx.nearSince = null;
+            ctx.candidate = null;
+            ctx.nativeEvidence = null;
+            ctx.clickedAt = null;
+            ctx.manualPause = null;
+            ctx.manualResume = null;
+            ctx.lastMatchingMediaAt = Date.now();
+            ctx.lastProgressAt = Date.now();
+            ctx.lastTime = null;
+            ctx.lastSampleLogAt = 0;
+            ctx.progressWarning = false;
+            ctx.silenceWarning = false;
+            ctx.mediaFailure = null;
+            state.player = playerDefaults();
+            state.manualPauseTest = { nonEndPause: null, resume: null };
+            state.endCandidate = null;
+        }
+
+        async function playNextTarget(ctx, next) {
+            state.transition.nextTarget = clone(next);
+            state.transition.nextSelection = { at: iso(), target: clone(next) };
+            state.target = next;
+            resetForNextTarget(ctx);
+            assertTarget(ctx);
+            const b = $$('#videoInfoBody button.btnVideo').find((x) =>
+                lectureNumber(x.dataset.lectNo) === next.lecture.lectNo);
+            if (!b) throw new Error('다음 대상 차시 버튼을 찾지 못했습니다.');
+            phase('WAIT_NEXT_PLAYING');
+            ctx.clickedAt = Date.now();
+            ctx.lastMatchingMediaAt = ctx.clickedAt;
+            ctx.lastProgressAt = ctx.clickedAt;
+            state.transition.nextClick = { at: iso(), weekNo: next.week.weekNo, lectNo: next.lecture.lectNo,
+                buttonClass: b.className };
+            record('NEXT_LECTURE_BUTTON_CLICK', state.transition.nextClick);
+            b.click();
+            signalPlayer('sample', ctx);
+            await waitFor(() => {
+                assertTarget(ctx);
+                if (ctx.mediaFailure) throw new Error(ctx.mediaFailure);
+                return ctx.hasPlayed;
+            }, CONFIG.playingTimeoutMs,
+            '다음 대상 차시의 실제 재생 시작을 확인하지 못했습니다. 다른 차시로 대체하지 않습니다.', ctx);
+            state.transition.nextPlaying = clone(state.player.firstPlaying || state.player.latestPlaying);
+            record('NEXT_PLAYING_CONFIRMED', state.transition.nextPlaying);
+            state.transition.terminalAction = 'STOP_AFTER_NEXT_PLAYING';
             persist(true);
-            return verification;
+            conclude(ctx, 'PASS_NEXT_PLAYING', '현재 인계 차시의 실제 종료와 새 출석 Y 확인 뒤, 같은 과목의 다음 미수강 차시 실제 재생을 확인했습니다. 다음 종료·세 번째 차시 선택은 하지 않습니다.');
         }
 
         function report() {
             return {
-                reportType: 'KCU_POC31_REPORT', schemaVersion: 1, scriptVersion: VERSION,
+                reportType: 'KCU_POC35_REPORT', schemaVersion: 1, scriptVersion: VERSION,
                 generatedAt: iso(), config: CONFIG,
                 state: { running: state.running, phase: state.phase, runId: state.runId,
                     startedAt: state.startedAt, finishedAt: state.finishedAt, result: state.result, lastError: state.lastError },
-                scope: 'CURRENT_COURSE_ONE_LECTURE_ONLY',
-                target: state.target, initialPage: state.initialPage || null,
-                player: state.player, endCandidate: state.endCandidate,
+                scope: 'FIRST_LNB_COURSE_TO_FIRST_UNCOMPLETED_TARGET_PLAYING_ONLY',
+                target: state.target, courseScan: state.courseScan, transition: state.transition, initialPage: state.initialPage || null,
+                player: state.player, manualPauseTest: state.manualPauseTest, endCandidate: state.endCandidate,
                 verificationAttempts: state.verificationAttempts,
                 currentPage: { course: course(), weekNo: currentWeek(), lectNo: lectureNumber($('#lectNo')?.value),
                     visibility: document.visibilityState, focused: document.hasFocus(), body: bodyStatus(), lectures: lectures(),
                     ajaxObserverInstalled: ajaxInstalled, ajaxHookError, pendingWeekRequests: pendingWeekIds.size },
                 eventCounts: state.eventCounts, dropped: state.dropped,
-                events: state.events, samples: state.samples, kcuRpc: state.rpc,
+                events: state.events, samples: state.samples, timeline: state.timeline, kcuRpc: state.rpc,
                 interpretation: {
                     attendanceIsNotFullViewingProof: true,
                     kcuRpcEndCodesValidated: false,
@@ -743,7 +1020,7 @@
             };
         }
         function reportText() {
-            return '===== KCU_POC31_REPORT_BEGIN =====\n' + JSON.stringify(report(), null, 2) + '\n===== KCU_POC31_REPORT_END =====';
+            return '===== KCU_POC35_REPORT_BEGIN =====\n' + JSON.stringify(report(), null, 2) + '\n===== KCU_POC35_REPORT_END =====';
         }
         function printReport() { console.log(reportText()); }
         function copyReport() {
@@ -754,7 +1031,7 @@
             const blob = new Blob([reportText()], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = `KCU_POC31_REPORT_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+            a.href = url; a.download = `KCU_POC35_REPORT_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
             (document.body || document.documentElement).append(a); a.click(); a.remove();
             setTimeout(() => URL.revokeObjectURL(url), 30000);
             log('리포트 파일 저장을 요청했습니다.');
@@ -764,9 +1041,16 @@
             signalPlayer('stop', ctx);
             state.running = false; state.phase = status.startsWith('PASS') || status === 'NO_TARGET' ? 'FINISHED' : status;
             state.finishedAt = iso();
-            state.result = { status, reason, endSource: state.endCandidate?.reason ?? null,
-                nativeEndedObserved: !!state.player.nativeEnded,
-                attendanceConfirmed: state.verificationAttempts.some((a) => a.atenYn === 'Y'),
+            const firstEnd = state.transition?.firstEndCandidate;
+            const firstAttendance = state.transition?.firstAttendance;
+            state.result = { status, reason,
+                endSource: firstEnd?.reason ?? state.endCandidate?.reason ?? null,
+                nativeEndedObserved: firstEnd?.reason === 'NATIVE_ENDED' || !!state.player.nativeEnded,
+                attendanceConfirmed: firstAttendance?.atenYn === 'Y' || state.verificationAttempts.some((a) => a.atenYn === 'Y'),
+                nextPlayingConfirmed: !!state.transition?.nextPlaying,
+                targetPlayingConfirmed: !!state.courseScan?.targetPlaying,
+                nonEndPauseObserved: !!(state.transition?.firstManualPauseTest?.nonEndPause || state.manualPauseTest?.nonEndPause),
+                manualResumeConfirmed: !!(state.transition?.firstManualPauseTest?.resume || state.manualPauseTest?.resume),
                 fullViewingVerified: false };
             if (status.startsWith('FAIL')) state.lastError = reason;
             record('RESULT', state.result);
@@ -776,72 +1060,37 @@
             printReport();
         }
         function stop(reason = '사용자 정지') {
+            clearHandoff();
             if (active && state.running) conclude(active, 'STOPPED', reason);
             else log('현재 실행 중인 POC가 없습니다.');
         }
         async function run(ctx) {
             try {
                 await initialReady(ctx);
-                assertCourse();
-                // 현재 영상이 이미 재생 중이면 다른 주차 클릭으로 끊지 않는다.
-                phase('CHECK_PLAYER_IDLE');
-                signalPlayer('sample', ctx);
-                await waitFor(() => ctx.preflight, 12000, '플레이어 계측기가 응답하지 않습니다. 설치 후 강의실을 새로고침했는지 확인하세요.', ctx);
-                if (!ctx.preflight.video.paused && !ctx.preflight.video.ended) throw new Error('이미 영상이 재생 중입니다. 사이트에서 일시정지한 뒤 POC를 시작하세요.');
-                phase('FIND_TARGET');
+                const current = assertCourse();
+                const links = courseLinks();
+                if (!links.length) throw new Error('LNB 과목 목록을 읽지 못했습니다.');
+                state.courseScan ||= { index: null, total: null, visited: [], handoff: null, targetPlaying: null };
+                state.courseScan.total = links.length;
+                const resume = ctx.handoff;
+                const index = resume ? resume.nextIndex : 0;
+                if (resume) {
+                    if (resume.runId !== state.runId || resume.expectedCoseCd !== current.coseCd) throw new Error('과목 이동 handoff와 새 페이지 과목 식별값이 일치하지 않습니다.');
+                    clearHandoff(); state.courseScan.handoff = null;
+                    record('COURSE_NAVIGATION_ARRIVED', { index, course: publicCourse(current) });
+                }
+                if (!links[index] || links[index].coseCd !== current.coseCd) {
+                    if (!links[index]) { conclude(ctx, 'NO_TARGET_ALL_COURSES', '모든 LNB 과목에서 적격 미수강 차시를 찾지 못했습니다.'); return; }
+                    await navigateToCourse(ctx, links[index]); return;
+                }
+                state.courseScan.index = index;
+                state.courseScan.visited.push({ index, course: publicCourse(current) });
+                record('COURSE_SCANNED', { index, course: publicCourse(current) });
                 const target = await findTarget(ctx);
-                requireRun(ctx);
-                if (!target) { conclude(ctx, 'NO_TARGET', '현재 과목에 출석 미인정 영상 차시가 없습니다.'); return; }
-                state.target = target;
-                record('TARGET_SELECTED', target);
-                // 응답으로 새로 생성된 버튼을 다시 찾는다.
-                const b = $$('#videoInfoBody button.btnVideo').find((x) => lectureNumber(x.dataset.lectNo) === target.lecture.lectNo);
-                if (!b) throw new Error('대상 차시 버튼을 찾지 못했습니다.');
-                assertTarget(ctx);
-                phase('WAIT_PLAYING');
-                ctx.clickedAt = Date.now(); ctx.lastMatchingMediaAt = ctx.clickedAt; ctx.lastProgressAt = ctx.clickedAt;
-                record('LECTURE_BUTTON_CLICK', { weekNo: target.week.weekNo, lectNo: target.lecture.lectNo, buttonClass: b.className });
-                // 영상 조작은 이 사이트 버튼 클릭 한 번뿐이다. 배속은 기존 Helper 담당.
-                b.click();
-                signalPlayer('sample', ctx);
-                await waitFor(() => {
-                    assertTarget(ctx);
-                    if (ctx.mediaFailure) throw new Error(ctx.mediaFailure);
-                    return ctx.hasPlayed;
-                }, CONFIG.playingTimeoutMs, '실제 영상 재생 시작을 확인하지 못했습니다. 자동재생 차단/플레이어 계측 상태를 확인하세요.', ctx);
-                phase('OBSERVING');
-                const deadline = performance.now() + CONFIG.observationTimeoutMs;
-                let accepted;
-                while (!accepted) {
-                    const remaining = deadline - performance.now();
-                    if (remaining <= 0) throw new Error('종료 후보 관찰 시간 한도 초과');
-                    const candidate = await waitFor(() => checkObservation(ctx), remaining, '종료 후보를 확인하지 못했습니다.', ctx);
-                    phase('WAIT_AFTER_END_CANDIDATE');
-                    record('END_GRACE_STARTED', { reason: candidate.reason, delayMs: CONFIG.attendanceDelayMs });
-                    await delay(CONFIG.attendanceDelayMs, ctx);
-                    assertTarget(ctx);
-                    if (!candidateStillValid(ctx, candidate)) {
-                        record('END_CANDIDATE_CANCELLED', { reason: '영상 인스턴스 또는 실제 끝부분 위치가 달라짐' });
-                        ctx.candidate = null; ctx.nearSince = null;
-                        phase('OBSERVING'); continue;
-                    }
-                    accepted = ctx.nativeEvidence ? { ...candidate, reason: 'NATIVE_ENDED', sample: ctx.nativeEvidence } : candidate;
-                }
-                state.endCandidate = accepted;
-                record('END_CANDIDATE_ACCEPTED', accepted);
-                persist(true);
-                for (let attempt = 1; attempt <= CONFIG.verificationAttempts; attempt++) {
-                    if (attempt > 1) { phase('WAIT_ATTENDANCE_RETRY'); await delay(CONFIG.retryDelayMs, ctx); }
-                    const verification = await verifyAttendance(ctx, attempt);
-                    if (!verification.found) throw new Error('재조회 응답에서 대상 차시가 사라졌습니다.');
-                    if (verification.atenYn === 'Y') {
-                        conclude(ctx, accepted.reason === 'NATIVE_ENDED' ? 'PASS_NATIVE_END' : 'PASS_FALLBACK_END',
-                            accepted.reason === 'NATIVE_ENDED' ? '실제 종료 신호와 새 응답의 출석 Y 확인' : '끝부분 위치 기반 종료 후보와 새 응답의 출석 Y 확인. native ended 검증은 별도.');
-                        return;
-                    }
-                    if (verification.atenYn !== 'N') throw new Error('재조회 응답의 출석 값이 Y/N이 아닙니다.');
-                }
-                conclude(ctx, 'FAIL_ATTENDANCE_NOT_CONFIRMED', '두 차례 새 주차 응답에서 출석 Y를 확인하지 못했습니다. 자동 재생 재시도는 하지 않습니다.');
+                if (target) { record('FIRST_UNCOMPLETED_COURSE_FOUND', { index, target }); await playCourseTarget(ctx, target); return; }
+                record('COURSE_NO_ELIGIBLE_TARGET', { index, course: publicCourse(current) });
+                if (!links[index + 1]) { conclude(ctx, 'NO_TARGET_ALL_COURSES', '모든 LNB 과목에서 적격 미수강 차시를 찾지 못했습니다.'); return; }
+                await navigateToCourse(ctx, links[index + 1]);
             } catch (e) {
                 if (e?.name !== 'AbortError' && ctx === active && state.running) conclude(ctx, 'FAILED', scalar(e?.message || '알 수 없는 오류'));
             } finally {
@@ -851,18 +1100,20 @@
         }
         function start() {
             if (active || state.running) { log('이전 실행이 처리 중입니다. 중지 후 다시 시작하세요.'); return; }
+            clearHandoff();
             state = defaults(); state.running = true; state.runId = id(); state.startedAt = iso(); state.phase = 'STARTING';
             latestRpcByName.clear();
             const ctx = {
                 id: state.runId, controller: new AbortController(), playerKey: null,
                 retiredPlayers: new Set(), lastSequence: new Map(), hasPlayed: false,
                 nearSince: null, candidate: null, nativeEvidence: null, clickedAt: null,
+                manualPause: null, manualResume: null,
                 lastProbeAt: Date.now(), lastMatchingMediaAt: Date.now(), lastProgressAt: Date.now(),
                 lastTime: null, lastSampleLogAt: 0, progressWarning: false, silenceWarning: false,
-                mediaFailure: null, verifying: false, preflight: null, pingTimer: null
+                mediaFailure: null, verifying: false, preflight: null, pingTimer: null, handoff: null, navigating: false
             };
             active = ctx;
-            record('START', { scope: 'CURRENT_COURSE_ONE_LECTURE_ONLY', visibility: document.visibilityState, focused: document.hasFocus() });
+            record('START', { scope: 'FIRST_LNB_COURSE_TO_FIRST_UNCOMPLETED_TARGET_PLAYING_ONLY', visibility: document.visibilityState, focused: document.hasFocus() });
             persist(true);
             ctx.pingTimer = setInterval(() => {
                 if (state.running && active === ctx) signalPlayer('sample', ctx);
@@ -871,19 +1122,21 @@
         }
 
         // 최소 UI: 경고창 없이 Tampermonkey 메뉴만 사용한다.
-        GM_registerMenuCommand('KCU POC3.1 시작 - 현재 과목 한 차시', start);
-        GM_registerMenuCommand('KCU POC3.1 정지 - 영상은 유지', () => stop());
-        GM_registerMenuCommand('KCU POC3.1 상태/리포트 출력', printReport);
-        GM_registerMenuCommand('KCU POC3.1 리포트 복사', copyReport);
-        GM_registerMenuCommand('KCU POC3.1 리포트 파일 저장', downloadReport);
-        GM_registerMenuCommand('KCU POC3.1 상태 초기화', () => {
+        GM_registerMenuCommand('KCU POC3.5 시작 - 첫 과목부터 첫 미수강 차시 찾기', start);
+        GM_registerMenuCommand('KCU POC3.5 정지 - 영상은 유지', () => stop());
+        GM_registerMenuCommand('KCU POC3.5 상태/리포트 출력', printReport);
+        GM_registerMenuCommand('KCU POC3.5 리포트 복사', copyReport);
+        GM_registerMenuCommand('KCU POC3.5 리포트 파일 저장', downloadReport);
+        GM_registerMenuCommand('KCU POC3.5 상태 초기화', () => {
             if (active || state.running) { stop('초기화 요청: 먼저 실행을 중지했습니다. 초기화 메뉴를 한 번 더 누르면 기록을 지웁니다.'); return; }
             clearTimeout(saveTimer); saveTimer = null;
-            GM_deleteValue(STATE_KEY); state = defaults(); log('POC3.1 상태를 초기화했습니다.');
+            GM_deleteValue(STATE_KEY); state = defaults(); log('POC3.5 상태를 초기화했습니다.');
         });
         function visibilityEvent(type) {
             if (!state.running) return;
             record(type, { visibility: document.visibilityState, focused: document.hasFocus() });
+            recordTimeline({ at: iso(), source: 'top', event: type.toLowerCase(), trusted: true,
+                visibility: document.visibilityState, focused: document.hasFocus(), video: null });
             signalPlayer();
         }
         document.addEventListener('visibilitychange', () => visibilityEvent('TOP_VISIBILITYCHANGE'));
@@ -897,15 +1150,32 @@
         document.addEventListener('change', (e) => {
             if (e.isTrusted && state.running && e.target instanceof Element && e.target.matches('.selMngrCose')) stop('사용자가 과목 선택을 변경함');
         }, true);
+        document.addEventListener('pointerdown', (e) => {
+            if (!state.running || !(e.target instanceof Element)) return;
+            const target = e.target.closest('button') ? 'button' : e.target.closest('a') ? 'link' : e.target.closest('input, select, textarea') ? 'form' : e.target.tagName.toLowerCase();
+            recordTimeline({ at: iso(), source: 'top-input', event: 'pointerdown', trusted: e.isTrusted === true,
+                target, button: e.button, hasCoordinates: Number.isFinite(e.clientX) && Number.isFinite(e.clientY),
+                visibility: document.visibilityState, focused: document.hasFocus(), video: null });
+        }, true);
         window.addEventListener('pagehide', () => {
-            if (active && state.running) {
+            if (active && state.running && !active.navigating) {
                 state.running = false; state.phase = 'INTERRUPTED'; state.finishedAt = iso();
                 state.result = { status: 'INTERRUPTED', reason: '강의실 페이지 이동 또는 새로고침' };
                 active.controller.abort();
             }
             persist(true); clearInterval(hookTimer); bodyObserver?.disconnect();
         });
-        if (state.running) {
+        const handoff = readHandoff();
+        if (state.running && handoff && state.runId === handoff.runId) {
+            const ctx = { id: state.runId, controller: new AbortController(), playerKey: null, retiredPlayers: new Set(), lastSequence: new Map(),
+                hasPlayed: false, nearSince: null, candidate: null, nativeEvidence: null, clickedAt: null, manualPause: null, manualResume: null,
+                lastProbeAt: Date.now(), lastMatchingMediaAt: Date.now(), lastProgressAt: Date.now(), lastTime: null, lastSampleLogAt: 0,
+                progressWarning: false, silenceWarning: false, mediaFailure: null, verifying: false, preflight: null, pingTimer: null, handoff, navigating: false };
+            active = ctx; record('COURSE_HANDOFF_RESUMED', { index: handoff.nextIndex, expectedCoseCd: handoff.expectedCoseCd }); persist(true);
+            ctx.pingTimer = setInterval(() => { if (state.running && active === ctx) signalPlayer('sample', ctx); }, 3000);
+            void run(ctx);
+        } else if (state.running) {
+            clearHandoff();
             state.running = false; state.phase = 'INTERRUPTED'; state.finishedAt = iso();
             state.result = { status: 'INTERRUPTED', reason: '이전 페이지 실행이 중단되었습니다. 자동 재시작하지 않습니다.' };
             persist(true);
@@ -916,6 +1186,6 @@
             tryInstallAjax(); ensureBodyObserver();
             if ((ajaxInstalled && observedBody) || Date.now() > hookDeadline) clearInterval(hookTimer);
         }, 50);
-        log('대기 상태. 이전 POC는 끄고, 강의실 새로고침 후 시작 메뉴를 사용하세요.');
+        log('대기 상태. 이전 Navigator POC는 끄고, 강의실 새로고침 후 시작 메뉴를 사용하세요.');
     }
 })();
