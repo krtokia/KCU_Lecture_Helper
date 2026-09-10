@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         KCU Auto Navigator POC 3.5
-// @name:ko      KCU 자동수강 Navigator POC 3.5
+// @name         KCU Auto Navigator Beta
+// @name:ko      KCU 자동수강 Navigator Beta
 // @namespace    kcu-lecture-helper
-// @version      0.3.9
-// @description  첫 과목부터 탐색해 첫 미수강 과목의 첫 차시 실제 재생만 검증
+// @version      0.4.0
+// @description  첫 과목부터 전체 미수강 차시를 실제 종료·출석 확인 뒤 순차 진행
 // @author       krtokia
 // @license      MIT
 // @updateURL    https://raw.githubusercontent.com/krtokia/KCU_Lecture_Helper/main/src/kcu-auto-navigator.user.js
@@ -23,7 +23,7 @@
  * 설치 / 사용
  * 1. 이전 Navigator POC는 모두 비활성화한다. 기존 Lecture Helper는 그대로 둔다.
  * 2. 이 전체 코드를 새 Tampermonkey 스크립트로 저장하고 강의실을 한 번 새로고침한다.
- * 3. 영상을 재생하지 않은 상태에서 메뉴의 "KCU POC3.5 시작 - 첫 과목부터 미수강 탐색".
+ * 3. 영상을 재생하지 않은 상태에서 메뉴의 "KCU Navigator Beta 시작".
  * 4. 결과는 "리포트 복사" 또는 "리포트 파일 저장"으로 전달한다.
  *
  * 범위: LNB 첫 과목부터. 첫 미수강 과목의 첫 영상 하나만 실제 재생까지 확인.
@@ -57,8 +57,8 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.3.9';
-    const CHANNEL = 'KCU_POC35_COURSE_SCAN_V1';
+    const VERSION = '0.4.0';
+    const CHANNEL = 'KCU_NAVIGATOR_BETA_V1';
     const LMS_ORIGIN = 'https://lms.kcu.ac';
     const PLAYER_ORIGIN = 'https://mvapi.kcu.ac';
     const STATE_KEY = 'kcuNavigatorPoc35State';
@@ -315,7 +315,7 @@
                 endCandidate: null, verificationAttempts: [], events: [], samples: [], rpc: [],
                 transition: { firstTarget: null, firstEndCandidate: null, firstAttendance: null, firstManualPauseTest: null,
                     nextTarget: null, nextSelection: null, nextClick: null, nextPlaying: null, terminalAction: null },
-                courseScan: { index: null, total: null, visited: [], handoff: null, targetPlaying: null },
+                courseScan: { index: null, total: null, visited: [], handoff: null, targetPlaying: null, completedTargets: [] },
                 timeline: [], timelineSequence: 0, eventCounts: {}, dropped: { events: 0, samples: 0, rpc: 0, timeline: 0 }
             };
         }
@@ -633,7 +633,7 @@
             await waitFor(() => false, 15000, '다음 과목 페이지 이동을 확인하지 못했습니다.', ctx);
         }
         async function playCourseTarget(ctx, target) {
-            state.target = target; assertTarget(ctx);
+            state.target = target; resetForNextTarget(ctx); assertTarget(ctx);
             state.courseScan.target = clone(target);
             phase('WAIT_TARGET_PLAYING');
             const button = $$('#videoInfoBody button.btnVideo').find((item) =>
@@ -649,8 +649,62 @@
                 return ctx.hasPlayed;
             }, CONFIG.playingTimeoutMs, '첫 미수강 차시의 실제 재생 시작을 확인하지 못했습니다.', ctx);
             state.courseScan.targetPlaying = clone(state.player.firstPlaying || state.player.latestPlaying);
-            record('FIRST_UNCOMPLETED_PLAYING_CONFIRMED', state.courseScan.targetPlaying);
-            conclude(ctx, 'PASS_FIRST_UNCOMPLETED_PLAYING', '첫 미수강 과목의 첫 적격 차시에서 실제 playing을 확인했습니다. 다음 차시·다음 과목은 재생하지 않습니다.');
+            record('TARGET_PLAYING_CONFIRMED', state.courseScan.targetPlaying);
+            persist(true);
+        }
+
+        async function observeAndVerifyTarget(ctx) {
+            phase('OBSERVING');
+            const deadline = performance.now() + CONFIG.observationTimeoutMs;
+            let accepted;
+            while (!accepted) {
+                const remaining = deadline - performance.now();
+                if (remaining <= 0) throw new Error('종료 후보 관찰 시간 한도 초과');
+                const observation = await waitFor(() => {
+                    const candidate = checkObservation(ctx);
+                    if (ctx.manualPause && !ctx.manualResume) return { type: 'MANUAL_PAUSE' };
+                    return candidate ? { type: 'END_CANDIDATE', candidate } : false;
+                }, remaining, '종료 후보 또는 수동 일시정지를 확인하지 못했습니다.', ctx);
+                if (observation.type === 'MANUAL_PAUSE') {
+                    phase('WAIT_MANUAL_RESUME');
+                    const pauseAt = ctx.manualPause.receivedAt;
+                    await waitFor(() => {
+                        checkObservation(ctx);
+                        return ctx.manualResume || false;
+                    }, CONFIG.manualResumeTimeoutMs,
+                    '수동 일시정지 뒤 실제 재생 재개를 5분 안에 확인하지 못했습니다. 자동 재생·다음 차시 선택 없이 중단합니다.', ctx);
+                    record('MANUAL_RESUME_WAIT_COMPLETED', { pauseAt, resumeAt: ctx.manualResume.receivedAt });
+                    phase('OBSERVING');
+                    continue;
+                }
+                const candidate = observation.candidate;
+                phase('WAIT_AFTER_END_CANDIDATE');
+                record('END_GRACE_STARTED', { reason: candidate.reason, delayMs: CONFIG.attendanceDelayMs });
+                await delay(CONFIG.attendanceDelayMs, ctx);
+                assertTarget(ctx);
+                if (!candidateStillValid(ctx, candidate)) {
+                    record('END_CANDIDATE_CANCELLED', { reason: '영상 인스턴스 또는 실제 끝부분 위치가 달라짐' });
+                    ctx.candidate = null; ctx.nearSince = null; phase('OBSERVING'); continue;
+                }
+                accepted = ctx.nativeEvidence ? { ...candidate, reason: 'NATIVE_ENDED', sample: ctx.nativeEvidence } : candidate;
+            }
+            state.endCandidate = accepted;
+            record('END_CANDIDATE_ACCEPTED', accepted);
+            persist(true);
+            for (let attempt = 1; attempt <= CONFIG.verificationAttempts; attempt++) {
+                if (attempt > 1) { phase('WAIT_ATTENDANCE_RETRY'); await delay(CONFIG.retryDelayMs, ctx); }
+                const verification = await verifyAttendance(ctx, attempt);
+                if (!verification.found) throw new Error('재조회 응답에서 대상 차시가 사라졌습니다.');
+                if (verification.atenYn === 'Y') {
+                    const completed = { target: clone(state.target), endCandidate: clone(accepted), verification: clone(verification), manualPauseTest: clone(state.manualPauseTest) };
+                    state.courseScan.completedTargets.push(completed);
+                    record('TARGET_COMPLETED_ATTENDANCE_CONFIRMED', completed);
+                    persist(true);
+                    return;
+                }
+                if (verification.atenYn !== 'N') throw new Error('재조회 응답의 출석 값이 Y/N이 아닙니다.');
+            }
+            throw new Error('두 차례 새 주차 응답에서 출석 Y를 확인하지 못했습니다. 자동 재생 재시도는 하지 않습니다.');
         }
 
         function adoptCurrentPlayingTarget(ctx) {
@@ -998,11 +1052,11 @@
 
         function report() {
             return {
-                reportType: 'KCU_POC35_REPORT', schemaVersion: 1, scriptVersion: VERSION,
+                reportType: 'KCU_NAVIGATOR_BETA_REPORT', schemaVersion: 1, scriptVersion: VERSION,
                 generatedAt: iso(), config: CONFIG,
                 state: { running: state.running, phase: state.phase, runId: state.runId,
                     startedAt: state.startedAt, finishedAt: state.finishedAt, result: state.result, lastError: state.lastError },
-                scope: 'FIRST_LNB_COURSE_TO_FIRST_UNCOMPLETED_TARGET_PLAYING_ONLY',
+                scope: 'FIRST_LNB_COURSE_THROUGH_ALL_ELIGIBLE_LECTURES_WITH_NATIVE_END_AND_FRESH_ATTENDANCE',
                 target: state.target, courseScan: state.courseScan, transition: state.transition, initialPage: state.initialPage || null,
                 player: state.player, manualPauseTest: state.manualPauseTest, endCandidate: state.endCandidate,
                 verificationAttempts: state.verificationAttempts,
@@ -1020,7 +1074,7 @@
             };
         }
         function reportText() {
-            return '===== KCU_POC35_REPORT_BEGIN =====\n' + JSON.stringify(report(), null, 2) + '\n===== KCU_POC35_REPORT_END =====';
+            return '===== KCU_NAVIGATOR_BETA_REPORT_BEGIN =====\n' + JSON.stringify(report(), null, 2) + '\n===== KCU_NAVIGATOR_BETA_REPORT_END =====';
         }
         function printReport() { console.log(reportText()); }
         function copyReport() {
@@ -1031,7 +1085,7 @@
             const blob = new Blob([reportText()], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = `KCU_POC35_REPORT_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+            a.href = url; a.download = `KCU_NAVIGATOR_BETA_REPORT_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
             (document.body || document.documentElement).append(a); a.click(); a.remove();
             setTimeout(() => URL.revokeObjectURL(url), 30000);
             log('리포트 파일 저장을 요청했습니다.');
@@ -1070,7 +1124,8 @@
                 const current = assertCourse();
                 const links = courseLinks();
                 if (!links.length) throw new Error('LNB 과목 목록을 읽지 못했습니다.');
-                state.courseScan ||= { index: null, total: null, visited: [], handoff: null, targetPlaying: null };
+                state.courseScan ||= { index: null, total: null, visited: [], handoff: null, targetPlaying: null, completedTargets: [] };
+                state.courseScan.completedTargets ||= [];
                 state.courseScan.total = links.length;
                 const resume = ctx.handoff;
                 const index = resume ? resume.nextIndex : 0;
@@ -1084,12 +1139,25 @@
                     await navigateToCourse(ctx, links[index]); return;
                 }
                 state.courseScan.index = index;
-                state.courseScan.visited.push({ index, course: publicCourse(current) });
+                if (!state.courseScan.visited.some((item) => item.index === index && item.course?.coseCd === current.coseCd)) {
+                    state.courseScan.visited.push({ index, course: publicCourse(current) });
+                }
                 record('COURSE_SCANNED', { index, course: publicCourse(current) });
-                const target = await findTarget(ctx);
-                if (target) { record('FIRST_UNCOMPLETED_COURSE_FOUND', { index, target }); await playCourseTarget(ctx, target); return; }
+                while (state.running) {
+                    const target = await findTarget(ctx);
+                    if (target) {
+                        record('TARGET_SELECTED', { index, target });
+                        await playCourseTarget(ctx, target);
+                        await observeAndVerifyTarget(ctx);
+                        state.target = null;
+                        record('COURSE_RESCAN_AFTER_COMPLETION', { index, completedCount: state.courseScan.completedTargets.length });
+                        persist(true);
+                        continue;
+                    }
+                    break;
+                }
                 record('COURSE_NO_ELIGIBLE_TARGET', { index, course: publicCourse(current) });
-                if (!links[index + 1]) { conclude(ctx, 'NO_TARGET_ALL_COURSES', '모든 LNB 과목에서 적격 미수강 차시를 찾지 못했습니다.'); return; }
+                if (!links[index + 1]) { conclude(ctx, 'PASS_ALL_COURSES_COMPLETED', '첫 과목부터 모든 과목의 적격 미수강 차시를 실제 종료와 새 출석 Y 확인까지 처리했습니다.'); return; }
                 await navigateToCourse(ctx, links[index + 1]);
             } catch (e) {
                 if (e?.name !== 'AbortError' && ctx === active && state.running) conclude(ctx, 'FAILED', scalar(e?.message || '알 수 없는 오류'));
@@ -1113,7 +1181,7 @@
                 mediaFailure: null, verifying: false, preflight: null, pingTimer: null, handoff: null, navigating: false
             };
             active = ctx;
-            record('START', { scope: 'FIRST_LNB_COURSE_TO_FIRST_UNCOMPLETED_TARGET_PLAYING_ONLY', visibility: document.visibilityState, focused: document.hasFocus() });
+            record('START', { scope: 'FIRST_LNB_COURSE_THROUGH_ALL_ELIGIBLE_LECTURES_WITH_NATIVE_END_AND_FRESH_ATTENDANCE', visibility: document.visibilityState, focused: document.hasFocus() });
             persist(true);
             ctx.pingTimer = setInterval(() => {
                 if (state.running && active === ctx) signalPlayer('sample', ctx);
@@ -1122,15 +1190,15 @@
         }
 
         // 최소 UI: 경고창 없이 Tampermonkey 메뉴만 사용한다.
-        GM_registerMenuCommand('KCU POC3.5 시작 - 첫 과목부터 첫 미수강 차시 찾기', start);
-        GM_registerMenuCommand('KCU POC3.5 정지 - 영상은 유지', () => stop());
-        GM_registerMenuCommand('KCU POC3.5 상태/리포트 출력', printReport);
-        GM_registerMenuCommand('KCU POC3.5 리포트 복사', copyReport);
-        GM_registerMenuCommand('KCU POC3.5 리포트 파일 저장', downloadReport);
-        GM_registerMenuCommand('KCU POC3.5 상태 초기화', () => {
+        GM_registerMenuCommand('KCU Navigator Beta 시작 - 첫 과목부터 연속 진행', start);
+        GM_registerMenuCommand('KCU Navigator Beta 정지 - 영상은 유지', () => stop());
+        GM_registerMenuCommand('KCU Navigator Beta 상태/리포트 출력', printReport);
+        GM_registerMenuCommand('KCU Navigator Beta 리포트 복사', copyReport);
+        GM_registerMenuCommand('KCU Navigator Beta 리포트 파일 저장', downloadReport);
+        GM_registerMenuCommand('KCU Navigator Beta 상태 초기화', () => {
             if (active || state.running) { stop('초기화 요청: 먼저 실행을 중지했습니다. 초기화 메뉴를 한 번 더 누르면 기록을 지웁니다.'); return; }
             clearTimeout(saveTimer); saveTimer = null;
-            GM_deleteValue(STATE_KEY); state = defaults(); log('POC3.5 상태를 초기화했습니다.');
+            GM_deleteValue(STATE_KEY); state = defaults(); log('Navigator Beta 상태를 초기화했습니다.');
         });
         function visibilityEvent(type) {
             if (!state.running) return;

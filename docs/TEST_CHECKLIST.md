@@ -100,3 +100,12 @@ node --check < src/kcu-auto-navigator.user.js
 - [ ] 새 페이지에서 10분 이내 handoff의 실행 ID·인덱스·예상 과목 ID를 새 DOM과 대조.
 - [ ] 첫 출석 N·영상 Y 과목에서만 첫 적격 차시 버튼 클릭 후 실제 playing 확인, 즉시 종료.
 - [ ] 모든 과목 완료 시 `NO_TARGET_ALL_COURSES`; handoff 불일치·이동 실패·수동 조작은 대체 없이 중단.
+
+## Navigator Beta 전체 과목 연속 실행
+
+- [ ] 각 대상의 actual playing, 종료 후보/유예, fresh AJAX 출석 Y 이전에는 다음 버튼 클릭이 없음.
+- [ ] 출석 Y 확인 뒤 같은 과목을 다시 조회해 다음 적격 차시 하나만 선택.
+- [ ] 현재 과목에 적격 차시가 없을 때만 다음 LNB 과목으로 이동하며, handoff 도착 검증 뒤에만 탐색.
+- [ ] 수동 pause는 실제 수동 재개까지 대기하고 `video.play()`·시간·진도·출석 API를 호출하지 않음.
+- [ ] 모든 적격 차시 처리 뒤에만 `PASS_ALL_COURSES_COMPLETED`; 모든 완료 기록에 종료 근거와 출석 검증이 있음.
+- [ ] 재생/종료/출석/handoff 실패, 사용자 조작, iframe 교체, 신호 공백은 다른 대상 대체 없이 종료.
