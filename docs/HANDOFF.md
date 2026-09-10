@@ -80,3 +80,15 @@ C. 실제 Navigator 기준 소스에서 3.1 요구와 차이를 비교 → 별�
 두 UserScript의 `@updateURL`과 `@downloadURL`을 각각 같은 공개 GitHub Raw `main` 소스 주소로 추가했다. Helper는 1.0.1, Navigator는 0.3.2로 patch 버전을 올렸고 Navigator의 런타임 VERSION도 0.3.2로 일치시켰다.
 
 두 파일의 `node --check`, 헤더의 버전·URL 일치 정적 검사, `git diff --check`를 통과했다. 커밋 `42937a6`을 push했고 공개 Raw 응답에서 두 새 버전 헤더를 확인했다. Tampermonkey 신규 설치/업데이트와 KCU 브라우저 검증, Greasy Fork 변경은 미수행이다.
+
+## 9. 2026-09-10 Helper ntfy 상태 표기
+
+Helper를 `1.0.3`으로 올렸다. Tampermonkey 메뉴에 `ntfy 상태 확인`을 추가하고,
+토글을 `현재 꺼짐 (클릭하면 켜짐)` 또는 `현재 켜짐 (클릭하면 꺼짐)`으로 표시한다.
+토글 및 주소 저장/삭제 직후에는 `켜짐/꺼짐`, `주소 설정됨/설정 안 됨`만 담은
+확인창을 띄운다. 실제 주소는 표시·로그하지 않는다.
+
+두 UserScript의 `node --check`, `git diff --check`, GM API 모의 상태 전환 검사를
+통과했다. Orca 내장 브라우저에는 Tampermonkey/KCU 로그인 탭이 없어 실제 확장
+메뉴 클릭과 저장 후 새로고침 검증은 미수행이다. 원격 push나 Greasy Fork 게시도
+수행하지 않았다.

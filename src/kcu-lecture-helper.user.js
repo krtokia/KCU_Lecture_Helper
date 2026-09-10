@@ -2,7 +2,7 @@
 // @name KCU Lecture Helper
 // @name:ko KCU 강의 도우미 - 자동 배속 / 중지 / 종료 알림
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.0.3
 // @description KCU 온라인 강의 자동 배속 및 재생 중지/종료 알림
 // @author       krtokia@gmail.com
 // @license      MIT
@@ -126,6 +126,25 @@
     }
 
 
+    function ntfyStatusText() {
+
+        const endpointConfigured = Boolean(
+            normalizeNtfyEndpoint(CONFIG.ntfy.url)
+        );
+
+        return (
+            `ntfy 알림: ${CONFIG.ntfy.enabled ? '켜짐' : '꺼짐'}\n` +
+            `주소: ${endpointConfigured ? '설정됨' : '설정 안 됨'}`
+        );
+    }
+
+
+    function showNtfyStatus() {
+
+        window.alert(ntfyStatusText());
+    }
+
+
     function configureNtfyEndpoint() {
 
         const input = window.prompt(
@@ -146,6 +165,8 @@
 
         CONFIG.ntfy.url = endpoint;
         GM_setValue(NTFY_STORAGE_KEYS.endpoint, endpoint);
+
+        showNtfyStatus();
     }
 
 
@@ -153,14 +174,20 @@
 
         CONFIG.ntfy.enabled = !CONFIG.ntfy.enabled;
         GM_setValue(NTFY_STORAGE_KEYS.enabled, CONFIG.ntfy.enabled);
+
+        showNtfyStatus();
     }
 
 
     function registerNtfyMenu() {
 
+        const enabledText = CONFIG.ntfy.enabled ? '켜짐' : '꺼짐';
+        const nextEnabledText = CONFIG.ntfy.enabled ? '꺼짐' : '켜짐';
+
+        GM_registerMenuCommand('KCU Helper: ntfy 상태 확인', showNtfyStatus);
         GM_registerMenuCommand('KCU Helper: ntfy 주소 설정/지우기', configureNtfyEndpoint);
         GM_registerMenuCommand(
-            `KCU Helper: ntfy ${CONFIG.ntfy.enabled ? '사용 중 → 끄기' : '꺼짐 → 켜기'}`,
+            `KCU Helper: ntfy 현재 ${enabledText} (클릭하면 ${nextEnabledText})`,
             toggleNtfyEnabled
         );
     }
