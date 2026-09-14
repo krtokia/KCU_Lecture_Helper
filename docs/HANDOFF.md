@@ -15,7 +15,7 @@
 | 업데이트 문제 | 제공된 1.0.1에 @downloadURL none이 들어갔다. 사용자는 자신의 배포본 업데이트를 막는 것에 이의를 제기했다. 조용히 유지하거나 배포하면 안 된다. |
 | Navigator POC 3 | 2026-09-08 리포트에 scriptVersion 0.3.0, phase PLAYING, finishedAt/result null. 실제 playing 확인은 있지만 해당 리포트는 완료 검증 결과가 아니다. |
 | Navigator POC 3.1 | `src/kcu-auto-navigator.user.js`에 0.3.1 내보낸 소스를 로컬 이관했다. 파일 존재는 사용자 전달·설치·실행 성공을 뜻하지 않는다. |
-| 현재 로컬 배포 소스 | Helper `1.1.1`, Navigator `1.0.0` (2026-09-14 기준; Navigator 1.0.0은 미커밋·미push, GitHub Raw `main`은 0.4.1). 두 파일 모두 GitHub Raw `main`의 `@updateURL`/`@downloadURL`을 사용한다. 이력은 7절 이후 참고. |
+| 현재 로컬 배포 소스 | Helper `1.1.1`, Navigator `1.0.0` (2026-09-14 커밋 `cd5abd8` push 완료, GitHub API로 `main`의 1.0.0 헤더 확인). 두 파일 모두 GitHub Raw `main`의 `@updateURL`/`@downloadURL`을 사용한다. 이력은 7절 이후 참고. |
 | 원격 저장소 | 공개 `krtokia/KCU_Lecture_Helper`, 기본 브랜치 `main`. GitHub Raw 자동 업데이트 메타데이터를 사용하며 실제 Tampermonkey 업데이트는 미검증. |
 
 Helper 교체는 Navigator 업그레이드가 아니다. 이전의 “이미 받은 3.1을 실행” 안내를 사실로 이어받지 않는다. [P1, P2, P4, P5]
@@ -73,7 +73,7 @@ ntfy 서버 응답 성공과 실제 단말 수신은 구분한다. [P1, P5]
 - 메뉴 라벨 정리(27절) 뒤 실제 Tampermonkey 팝업에서 Helper 4개·Navigator 6개 항목 표기 확인.
 - Navigator Beta의 수동 pause 대기 및 오류·불일치 중단 경로 실제 재현 (26절 완주 리포트에는 미발생).
 - Helper 자동 재개가 실제 KCU에서 발동해 재생을 복구한 리포트 확보 (16절 도입 이후 미확보).
-- Navigator `1.0.0`(28~29절) 커밋·push 후 GitHub Raw 응답과 실제 Tampermonkey 업데이트 확인.
+- Navigator `1.0.0` GitHub Raw 응답 갱신(CDN 캐시 해제 뒤)과 실제 Tampermonkey 업데이트·메뉴 6개 표기 확인.
 - 이후 남은 강의 진행 중 발견되는 문제는 `실행 기록 저장` 리포트 기반 버그 수정으로 대응.
 - Greasy Fork 게시물 정리 여부 결정 (현재 GitHub Raw 자동 업데이트만 사용).
 
@@ -438,4 +438,10 @@ Tampermonkey/KCU 검증은 미수행이며, 커밋·push도 하지 않았다. �
 
 `node --check`, `git diff --check`, Node 모의 GM 환경 36건(메뉴 6개·순서·토글 뒤 순서 유지 포함)을
 통과했다. README, src/README, RELEASE의 POC/Beta 표현을 1.0.0 기준으로 고쳤다. 실제 Tampermonkey
-메뉴 표기 확인과 커밋·push는 아직이다.
+메뉴 표기 확인은 아직이다.
+
+커밋은 `63e828a`(HANDOFF 절 정리), `16e1c24`(0.5.0 알림), `cd5abd8`(1.0.0 메뉴 정리)의 세 개로 나눠
+`main`에 push했다. GitHub API로 `main`의 Navigator 헤더 `@version 1.0.0`을 확인했으며, push 직후
+GitHub Raw 응답은 CDN 캐시로 잠시 `0.4.1`을 반환했다. 이 WSL 환경의 gh는 활성 계정이 저장소
+소유자와 달라 push가 403으로 거부되므로, `gh auth token --user krtokia`를 일회성 credential
+helper로 넘겨 push한다.
