@@ -1,7 +1,7 @@
 # KCU Lecture Tools — Codex 인수인계
 기준일: 2026-09-09 (Asia/Seoul)
 
-**로컬에서 추적하는 실행용 Helper/Navigator UserScript 소스가 포함되어 있습니다.** 두 파일은 현재 내보낸 원본을 이름만 정리한 로컬 작업본이며, 이 패키지는 POC 3.1의 설치·실행 성공을 검증한 결과물이 아닙니다.
+**로컬에서 추적하는 실행용 Helper/Navigator UserScript 소스가 포함되어 있습니다.** 두 파일은 현재 내보낸 원본을 이름만 정리한 로컬 작업본이며, Navigator는 2026-09-14 기준 `1.0.0`이며, 실제 동작 확인은 docs/HANDOFF.md의 실측 기록을 따릅니다.
 
 ## 시작
 1. 기존 두 스크립트를 각각 전체 백업합니다. 개인정보가 있을 수 있는 원본은 `.local/originals/`처럼 Git에서 제외되는 위치에 보관합니다.

@@ -2,7 +2,7 @@
 // @name         KCU Course Navigator
 // @name:ko      KCU 학습 진행 도우미
 // @namespace    kcu-lecture-helper
-// @version      0.5.0
+// @version      1.0.0
 // @description  첫 과목부터 전체 미수강 차시를 실제 종료·출석 확인 뒤 순차 진행, 완료·중단 알림
 // @author       krtokia
 // @license      MIT
@@ -28,7 +28,8 @@
  * 1. 이전 Navigator 설치본은 모두 비활성화한다. 기존 Lecture Helper는 그대로 둔다.
  * 2. 이 전체 코드를 새 Tampermonkey 스크립트로 저장하고 강의실을 한 번 새로고침한다.
  * 3. 영상을 재생하지 않은 상태에서 메뉴의 "KCU 학습 진행 · 시작".
- * 4. 결과는 "실행 기록 복사" 또는 "실행 기록 저장"으로 전달한다.
+ * 4. 문제가 생기면 "실행 기록 저장"으로 리포트 파일을 만들어 전달한다.
+ *    (상태 보기·복사·초기화 함수는 코드에 남겨 두었으며 1.0.0부터 메뉴에 등록하지 않는다.)
  * 5. 알림: 실행 완료/처리 대상 없음/중단은 브라우저 알림(기본 켜짐)과 ntfy(주소 설정 시)로 알린다.
  *    차시 완료 알림은 기본 꺼짐이다. 사용자 정지와 페이지 이탈은 알리지 않는다.
  *    ntfy 주소는 Tampermonkey 로컬 저장소에만 보관하며 리포트·콘솔에 출력하지 않는다.
@@ -63,7 +64,7 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.5.0';
+    const VERSION = '1.0.0';
     const CHANNEL = 'KCU_NAVIGATOR_BETA_V1';
     const LMS_ORIGIN = 'https://lms.kcu.ac';
     const PLAYER_ORIGIN = 'https://mvapi.kcu.ac';
@@ -478,13 +479,11 @@
             const onOff = (v) => v ? '켜짐' : '꺼짐';
             addMenuCommand('KCU 학습 진행 · 시작', start);
             addMenuCommand('KCU 학습 진행 · 중지 (영상 유지)', () => stop());
-            addMenuCommand('KCU 학습 진행 · 상태 보기', printReport);
-            addMenuCommand('KCU 학습 진행 · 실행 기록 복사', copyReport);
-            addMenuCommand('KCU 학습 진행 · 실행 기록 저장', downloadReport);
-            addMenuCommand('KCU 학습 진행 · 기록 초기화', resetState);
             addMenuCommand(`KCU 학습 진행 · 브라우저 알림 ${onOff(notify.osEnabled)} → ${onOff(!notify.osEnabled)}`, () => toggleNotifySetting('osEnabled'));
             addMenuCommand(`KCU 학습 진행 · 차시 완료 알림 ${onOff(notify.lectureEnabled)} → ${onOff(!notify.lectureEnabled)}`, () => toggleNotifySetting('lectureEnabled'));
             addMenuCommand(`KCU 학습 진행 · ntfy 주소 설정/지우기 (${notify.ntfyEndpoint ? '설정됨' : '설정 안 됨'})`, configureNtfyEndpoint);
+            addMenuCommand('KCU 학습 진행 · 실행 기록 저장', downloadReport);
+            // printReport(콘솔 상태 보기)·copyReport(복사)·resetState(초기화)는 디버깅용으로 보존하되 메뉴에 등록하지 않는다.
         }
         function refreshMenu() { unregisterMenu(); registerMenu(); }
 
@@ -1318,6 +1317,7 @@
         }
 
         // 최소 UI: Tampermonkey 메뉴만 사용한다. 알림 설정 메뉴는 클릭 직후 라벨을 갱신한다.
+        // eslint-disable-next-line no-unused-vars
         function resetState() {
             if (active || state.running) { stop('초기화 요청: 먼저 실행을 중지했습니다. 초기화 메뉴를 한 번 더 누르면 기록을 지웁니다.'); return; }
             clearTimeout(saveTimer); saveTimer = null;

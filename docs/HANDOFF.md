@@ -15,7 +15,7 @@
 | 업데이트 문제 | 제공된 1.0.1에 @downloadURL none이 들어갔다. 사용자는 자신의 배포본 업데이트를 막는 것에 이의를 제기했다. 조용히 유지하거나 배포하면 안 된다. |
 | Navigator POC 3 | 2026-09-08 리포트에 scriptVersion 0.3.0, phase PLAYING, finishedAt/result null. 실제 playing 확인은 있지만 해당 리포트는 완료 검증 결과가 아니다. |
 | Navigator POC 3.1 | `src/kcu-auto-navigator.user.js`에 0.3.1 내보낸 소스를 로컬 이관했다. 파일 존재는 사용자 전달·설치·실행 성공을 뜻하지 않는다. |
-| 현재 로컬 배포 소스 | Helper `1.1.1`, Navigator `0.5.0` (2026-09-14 기준; Navigator 0.5.0은 미커밋·미push, GitHub Raw `main`은 0.4.1). 두 파일 모두 GitHub Raw `main`의 `@updateURL`/`@downloadURL`을 사용한다. 이력은 7절 이후 참고. |
+| 현재 로컬 배포 소스 | Helper `1.1.1`, Navigator `1.0.0` (2026-09-14 기준; Navigator 1.0.0은 미커밋·미push, GitHub Raw `main`은 0.4.1). 두 파일 모두 GitHub Raw `main`의 `@updateURL`/`@downloadURL`을 사용한다. 이력은 7절 이후 참고. |
 | 원격 저장소 | 공개 `krtokia/KCU_Lecture_Helper`, 기본 브랜치 `main`. GitHub Raw 자동 업데이트 메타데이터를 사용하며 실제 Tampermonkey 업데이트는 미검증. |
 
 Helper 교체는 Navigator 업그레이드가 아니다. 이전의 “이미 받은 3.1을 실행” 안내를 사실로 이어받지 않는다. [P1, P2, P4, P5]
@@ -73,7 +73,8 @@ ntfy 서버 응답 성공과 실제 단말 수신은 구분한다. [P1, P5]
 - 메뉴 라벨 정리(27절) 뒤 실제 Tampermonkey 팝업에서 Helper 4개·Navigator 6개 항목 표기 확인.
 - Navigator Beta의 수동 pause 대기 및 오류·불일치 중단 경로 실제 재현 (26절 완주 리포트에는 미발생).
 - Helper 자동 재개가 실제 KCU에서 발동해 재생을 복구한 리포트 확보 (16절 도입 이후 미확보).
-- Navigator `0.5.0` 알림(28절)의 실제 KCU/Tampermonkey 검증, 이상 없으면 커밋·push 및 `1.0.0` 승격 여부 결정.
+- Navigator `1.0.0`(28~29절) 커밋·push 후 GitHub Raw 응답과 실제 Tampermonkey 업데이트 확인.
+- 이후 남은 강의 진행 중 발견되는 문제는 `실행 기록 저장` 리포트 기반 버그 수정으로 대응.
 - Greasy Fork 게시물 정리 여부 결정 (현재 GitHub Raw 자동 업데이트만 사용).
 
 새 작업 결과에는 실제 두 소스 버전/해시, 도구 버전, 변경 메타데이터, 수행한 검사와 미검증 사항을 남긴다.
@@ -426,3 +427,15 @@ Navigator를 `0.5.0`으로 올렸다. `conclude`에서 전 과목 완료(`KCU �
 (`docs/plans/navigator-notifications.md` 참고). Orca 내장 브라우저에 탭이 없어 실제
 Tampermonkey/KCU 검증은 미수행이며, 커밋·push도 하지 않았다. 사용자가 실제 실행에서 이상이
 없다고 확인하면 `1.0.0` 승격 후보다.
+
+## 29. 2026-09-14 Navigator 1.0.0 승격 및 메뉴 정리
+
+사용자가 실제 KCU에서 0.5.0 알림 동작에 별다른 이상이 없음을 확인했다. 남은 강의는 버그 수정
+방식으로 대응하기로 하고 Navigator를 `1.0.0`으로 올렸다. 메뉴는 시작, 중지 (영상 유지),
+브라우저 알림 토글, 차시 완료 알림 토글, ntfy 주소 설정/지우기, 실행 기록 저장의 6개로 줄였다.
+상태 보기(콘솔 출력), 실행 기록 복사(저장의 불안정한 대체), 기록 초기화(시작·새로고침이 이미
+상태를 정리함)는 함수를 보존하되 메뉴에 등록하지 않는다. 리포트 구조와 실행 로직은 바꾸지 않았다.
+
+`node --check`, `git diff --check`, Node 모의 GM 환경 36건(메뉴 6개·순서·토글 뒤 순서 유지 포함)을
+통과했다. README, src/README, RELEASE의 POC/Beta 표현을 1.0.0 기준으로 고쳤다. 실제 Tampermonkey
+메뉴 표기 확인과 커밋·push는 아직이다.

@@ -3,7 +3,7 @@
 ## 기본 구조
 두 개의 완결된 `.user.js`를 하나의 저장소에서 관리한다. 로컬 개발 중 저장할 때마다 push할 필요는 없다.
 처음부터 번들러/Actions/서버를 필수로 추가하지 않는다. 기본 브랜치 Raw 주소를 배포한다면 그 브랜치에는 검증된 변경만 병합한다.
-Navigator는 POC라는 사실을 명시하고 안정판으로 표현하지 않는다.
+Navigator는 2026-09-14 `1.0.0`부터 정식 버전으로 표기한다. 출석 Y가 전체 시청 증명이 아니라는 리포트 해석 원칙은 그대로다.
 
 현재 이관본은 `src/kcu-lecture-helper.user.js`와 `src/kcu-auto-navigator.user.js`에 있으며, 공개 GitHub 저장소 `krtokia/KCU_Lecture_Helper`의 `main`에 추적한다. Helper는 개인 ntfy 값을 소스에 두지 않고 Tampermonkey 로컬 저장소에서만 읽는다. 기존 Greasy Fork 게시물은 변경하지 않았다.
 
@@ -44,6 +44,7 @@ private 저장소의 임시 Raw 토큰을 코드에 넣지 않는다. 비공개 
 - Tampermonkey 메뉴에서 **KCU Helper: ntfy 주소 설정/지우기**로 자신의 주소를 저장하고, **KCU Helper: ntfy 꺼짐 → 켜기**로 사용 여부를 바꾼다. 메뉴 문구는 열 당시 상태를 표시하므로 상태 변경 뒤에는 메뉴를 다시 열어 확인한다.
 - 기존 사용자는 자신의 주소를 다시 입력해야 한다. 개발자 주소를 fallback으로 유지하지 않는다. 주소·토큰을 콘솔이나 리포트에 출력하지 않는다.
 - 현재 `@connect ntfy.sh`는 유지한다. 이 작업은 self-hosted 지원을 명분으로 `@connect *`를 추가하지 않는다.
+- Navigator `0.5.0`부터는 실행 완료/중단 알림용 ntfy 주소를 Navigator 자체 GM 저장소(`kcuNavigatorNtfyEndpoint`)에 따로 보관한다. Tampermonkey 저장소는 스크립트별로 분리되므로 Helper 주소가 자동으로 공유되지 않으며, 사용자는 **KCU 학습 진행 · ntfy 주소 설정/지우기** 메뉴에서 다시 입력한다. 기본값은 빈 주소이고 유효한 `https://ntfy.sh/` 주소일 때만 전송한다.
 - 업데이트/재시작 뒤 설정 유지와 LMS/플레이어 iframe에서의 일관된 적용은 실제 설치본에서 확인해야 한다. 이름/namespace/설치본 변경도 설정 이관 관점에서 검토한다.
 
 ## 게시 전
