@@ -2,8 +2,8 @@
 // @name         KCU Course Navigator
 // @name:ko      KCU 학습 진행 도우미
 // @namespace    kcu-lecture-helper
-// @version      0.4.1
-// @description  첫 과목부터 전체 미수강 차시를 실제 종료·출석 확인 뒤 순차 진행
+// @version      0.5.0
+// @description  첫 과목부터 전체 미수강 차시를 실제 종료·출석 확인 뒤 순차 진행, 완료·중단 알림
 // @author       krtokia
 // @license      MIT
 // @updateURL    https://raw.githubusercontent.com/krtokia/KCU_Lecture_Helper/main/src/kcu-auto-navigator.user.js
@@ -15,8 +15,12 @@
 // @grant        GM_setValue
 // @grant        GM_deleteValue
 // @grant        GM_registerMenuCommand
+// @grant        GM_unregisterMenuCommand
+// @grant        GM_notification
+// @grant        GM_xmlhttpRequest
 // @grant        GM_setClipboard
 // @grant        unsafeWindow
+// @connect      ntfy.sh
 // ==/UserScript==
 
 /*
@@ -25,6 +29,9 @@
  * 2. 이 전체 코드를 새 Tampermonkey 스크립트로 저장하고 강의실을 한 번 새로고침한다.
  * 3. 영상을 재생하지 않은 상태에서 메뉴의 "KCU 학습 진행 · 시작".
  * 4. 결과는 "실행 기록 복사" 또는 "실행 기록 저장"으로 전달한다.
+ * 5. 알림: 실행 완료/처리 대상 없음/중단은 브라우저 알림(기본 켜짐)과 ntfy(주소 설정 시)로 알린다.
+ *    차시 완료 알림은 기본 꺼짐이다. 사용자 정지와 페이지 이탈은 알리지 않는다.
+ *    ntfy 주소는 Tampermonkey 로컬 저장소에만 보관하며 리포트·콘솔에 출력하지 않는다.
  *
  * 범위: LNB 첫 과목부터 모든 적격 미수강 영상의 실제 종료·출석 확인까지 순차 진행한다.
  * 정지: 진행 대기/예약 동작만 취소한다. 영상 자체는 일시정지하지 않는다.
@@ -56,12 +63,17 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.4.1';
+    const VERSION = '0.5.0';
     const CHANNEL = 'KCU_NAVIGATOR_BETA_V1';
     const LMS_ORIGIN = 'https://lms.kcu.ac';
     const PLAYER_ORIGIN = 'https://mvapi.kcu.ac';
     const STATE_KEY = 'kcuNavigatorPoc35State';
     const HANDOFF_KEY = 'kcuNavigatorPoc35CourseHandoff';
+    const NOTIFY_KEYS = Object.freeze({
+        osEnabled: 'kcuNavigatorNotifyOsEnabled',
+        ntfyEndpoint: 'kcuNavigatorNtfyEndpoint',
+        lectureEnabled: 'kcuNavigatorNotifyLectureEnabled'
+    });
     const TAG = '[KCU POC3.5]';
     const WEEK_API = '/common/lect/selectWeekLectInfo';
     const CONFIG = Object.freeze({
@@ -361,6 +373,121 @@
             record('PHASE', { value });
             log(value);
         }
+        // ------------------------------------------------------------
+        // 알림 (0.5.0): 실행 종료와 선택적 차시 완료만 알린다.
+        // 영상 pause는 Helper가 이미 알리므로 여기서 다시 알리지 않는다.
+        // ------------------------------------------------------------
+        const notify = { osEnabled: true, ntfyEndpoint: '', lectureEnabled: false };
+        const menuCommandIds = [];
+        function normalizeNtfyEndpoint(value) {
+            const endpoint = scalar(value).trim();
+            if (!endpoint) return '';
+            try {
+                const u = new URL(endpoint);
+                return u.protocol === 'https:' && u.hostname === 'ntfy.sh' ? u.href : '';
+            } catch (_) { return ''; }
+        }
+        function loadNotifySettings() {
+            try {
+                notify.osEnabled = GM_getValue(NOTIFY_KEYS.osEnabled, true) !== false;
+                notify.ntfyEndpoint = normalizeNtfyEndpoint(GM_getValue(NOTIFY_KEYS.ntfyEndpoint, ''));
+                notify.lectureEnabled = GM_getValue(NOTIFY_KEYS.lectureEnabled, false) === true;
+            } catch (e) { log('알림 설정을 읽지 못했습니다:', e?.name || e); }
+        }
+        function sendOsNotification(title, message) {
+            if (!notify.osEnabled) return false;
+            try { GM_notification({ title, text: message, timeout: 10000 }); return true; }
+            catch (e) { log('브라우저 알림 실패:', e?.name || e); return false; }
+        }
+        function sendNtfy(kind, title, message) {
+            const endpoint = normalizeNtfyEndpoint(notify.ntfyEndpoint);
+            if (!endpoint) return false;
+            try {
+                GM_xmlhttpRequest({
+                    method: 'POST', url: endpoint, data: message,
+                    headers: { Title: encodeURIComponent(title), Priority: kind === 'FAILED' ? 'high' : 'default' },
+                    onload(response) { record('NOTIFICATION_NTFY_RESULT', { kind, httpStatus: response?.status ?? null }); persist(); },
+                    onerror() { record('NOTIFICATION_NTFY_RESULT', { kind, error: true }); persist(); }
+                });
+                return true;
+            } catch (e) { log('ntfy 호출 실패:', e?.name || e); return false; }
+        }
+        function notifyUser(kind, title, message) {
+            const os = sendOsNotification(title, message);
+            const ntfy = sendNtfy(kind, title, message);
+            record('NOTIFICATION_SENT', { kind, os, ntfy });
+            persist(true);
+        }
+        function lectureLabel(target) {
+            const title = scalar(target?.course?.title).trim() || '과목';
+            const week = numberOrNull(target?.week?.weekNo);
+            const lect = numberOrNull(target?.lecture?.lectNo);
+            return `${title} ${week ?? '?'}주 ${lect ?? '?'}강`;
+        }
+        function notifyRunConcluded(status, reason) {
+            if (status === 'STOPPED') return;
+            const completed = state.courseScan?.completedTargets || [];
+            const visited = state.courseScan?.visited || [];
+            if (status === 'PASS_ALL_COURSES_COMPLETED') {
+                const lines = completed.slice(0, 10).map((c) => `- ${lectureLabel(c.target)}`);
+                if (completed.length > 10) lines.push(`외 ${completed.length - 10}개`);
+                notifyUser(status, 'KCU 학습 진행 완료',
+                    [`과목 ${visited.length}개 확인, 차시 ${completed.length}개 완료.`, ...lines].join('\n'));
+            } else if (status === 'NO_TARGET_ALL_COURSES') {
+                notifyUser(status, 'KCU 학습 진행 완료', `과목 ${visited.length}개를 확인했지만 처리할 미수강 차시가 없습니다.`);
+            } else if (status.startsWith('PASS') || status.startsWith('NO_TARGET')) {
+                notifyUser(status, 'KCU 학습 진행 완료', scalar(reason) || status);
+            } else {
+                const context = state.target ? `진행 중이던 차시: ${lectureLabel(state.target)}` : `완료 차시 ${completed.length}개`;
+                notifyUser('FAILED', 'KCU 학습 진행 중단', `${scalar(reason) || '알 수 없는 오류'}\n${context}`);
+            }
+        }
+        function notifyLectureCompleted(completed) {
+            if (!notify.lectureEnabled) return;
+            const count = state.courseScan?.completedTargets?.length || 0;
+            notifyUser('LECTURE_COMPLETED', 'KCU 차시 완료', `${lectureLabel(completed.target)} 출석 확인 (누적 ${count}개)`);
+        }
+        function unregisterMenu() {
+            if (typeof GM_unregisterMenuCommand !== 'function') return;
+            while (menuCommandIds.length) {
+                const mid = menuCommandIds.pop();
+                try { GM_unregisterMenuCommand(mid); } catch (_) {}
+            }
+        }
+        function addMenuCommand(label, handler) {
+            const mid = GM_registerMenuCommand(label, handler);
+            if (mid !== undefined && mid !== null) menuCommandIds.push(mid);
+        }
+        function toggleNotifySetting(field) {
+            notify[field] = !notify[field];
+            try { GM_setValue(NOTIFY_KEYS[field], notify[field]); } catch (e) { log('알림 설정 저장 실패:', e?.name || e); }
+            log(`${field === 'osEnabled' ? '브라우저 알림' : '차시 완료 알림'}: ${notify[field] ? '켜짐' : '꺼짐'}`);
+            refreshMenu();
+        }
+        function configureNtfyEndpoint() {
+            const input = window.prompt('ntfy.sh HTTPS 주소를 입력하세요. 빈 값이면 주소를 지웁니다.', notify.ntfyEndpoint);
+            if (input === null) return;
+            const endpoint = normalizeNtfyEndpoint(input);
+            if (input.trim() && !endpoint) { window.alert('https://ntfy.sh/ 형식의 유효한 주소를 입력하세요.'); return; }
+            notify.ntfyEndpoint = endpoint;
+            try { GM_setValue(NOTIFY_KEYS.ntfyEndpoint, endpoint); } catch (e) { log('ntfy 주소 저장 실패:', e?.name || e); }
+            window.alert(`KCU 학습 진행 ntfy 알림: ${endpoint ? '켜짐' : '꺼짐'}\n주소: ${endpoint || '설정 안 됨'}`);
+            refreshMenu();
+        }
+        function registerMenu() {
+            const onOff = (v) => v ? '켜짐' : '꺼짐';
+            addMenuCommand('KCU 학습 진행 · 시작', start);
+            addMenuCommand('KCU 학습 진행 · 중지 (영상 유지)', () => stop());
+            addMenuCommand('KCU 학습 진행 · 상태 보기', printReport);
+            addMenuCommand('KCU 학습 진행 · 실행 기록 복사', copyReport);
+            addMenuCommand('KCU 학습 진행 · 실행 기록 저장', downloadReport);
+            addMenuCommand('KCU 학습 진행 · 기록 초기화', resetState);
+            addMenuCommand(`KCU 학습 진행 · 브라우저 알림 ${onOff(notify.osEnabled)} → ${onOff(!notify.osEnabled)}`, () => toggleNotifySetting('osEnabled'));
+            addMenuCommand(`KCU 학습 진행 · 차시 완료 알림 ${onOff(notify.lectureEnabled)} → ${onOff(!notify.lectureEnabled)}`, () => toggleNotifySetting('lectureEnabled'));
+            addMenuCommand(`KCU 학습 진행 · ntfy 주소 설정/지우기 (${notify.ntfyEndpoint ? '설정됨' : '설정 안 됨'})`, configureNtfyEndpoint);
+        }
+        function refreshMenu() { unregisterMenu(); registerMenu(); }
+
         function abortError() { const e = new Error('POC가 중지되었습니다.'); e.name = 'AbortError'; return e; }
         function requireRun(ctx) {
             if (ctx !== active || ctx.controller.signal.aborted || !state.running) throw abortError();
@@ -699,6 +826,7 @@
                     state.courseScan.completedTargets.push(completed);
                     record('TARGET_COMPLETED_ATTENDANCE_CONFIRMED', completed);
                     persist(true);
+                    notifyLectureCompleted(completed);
                     return;
                 }
                 if (verification.atenYn !== 'N') throw new Error('재조회 응답의 출석 값이 Y/N이 아닙니다.');
@@ -1108,6 +1236,7 @@
             if (status.startsWith('FAIL')) state.lastError = reason;
             record('RESULT', state.result);
             persist(true);
+            notifyRunConcluded(status, reason);
             ctx.controller.abort();
             log('POC 종료:', status, reason || '');
             printReport();
@@ -1188,17 +1317,14 @@
             void run(ctx);
         }
 
-        // 최소 UI: 경고창 없이 Tampermonkey 메뉴만 사용한다.
-        GM_registerMenuCommand('KCU 학습 진행 · 시작', start);
-        GM_registerMenuCommand('KCU 학습 진행 · 중지 (영상 유지)', () => stop());
-        GM_registerMenuCommand('KCU 학습 진행 · 상태 보기', printReport);
-        GM_registerMenuCommand('KCU 학습 진행 · 실행 기록 복사', copyReport);
-        GM_registerMenuCommand('KCU 학습 진행 · 실행 기록 저장', downloadReport);
-        GM_registerMenuCommand('KCU 학습 진행 · 기록 초기화', () => {
+        // 최소 UI: Tampermonkey 메뉴만 사용한다. 알림 설정 메뉴는 클릭 직후 라벨을 갱신한다.
+        function resetState() {
             if (active || state.running) { stop('초기화 요청: 먼저 실행을 중지했습니다. 초기화 메뉴를 한 번 더 누르면 기록을 지웁니다.'); return; }
             clearTimeout(saveTimer); saveTimer = null;
             GM_deleteValue(STATE_KEY); state = defaults(); log('Navigator Beta 상태를 초기화했습니다.');
-        });
+        }
+        loadNotifySettings();
+        registerMenu();
         function visibilityEvent(type) {
             if (!state.running) return;
             record(type, { visibility: document.visibilityState, focused: document.hasFocus() });
