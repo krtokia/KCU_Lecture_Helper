@@ -1,10 +1,11 @@
 # 프로젝트 인수인계
-기준일: 2026-09-09. 기존 대화와 사용자 첨부 자료를 정리한 문서이며, 현재 KCU 사이트를 새로 실측한 보고서가 아니다. 근거는 SOURCES.md 참고.
+기준일: 2026-09-14 (마지막 코드 변경 2026-09-10). 1~6절은 2026-09-09 인수 시점의 배경이고,
+7절부터는 날짜순 작업 기록이다. 근거는 SOURCES.md 참고.
 
 ## 1. 목표
 기존 Helper는 영상 자동 감지·2배속 유지·중지/종료 알림을 담당한다.
-별도 Navigator는 과목/주차/차시를 찾아 재생을 이어주는 방향으로 개발 중이다.
-지금은 기능을 확장하기 전에 로컬 Git/VS Code/Codex 개발과 사용자 배포를 정리한다.
+별도 Navigator는 과목/주차/차시를 찾아 재생을 이어주며, Beta `0.4.x`에서 전 과목 연속 실행까지 실측했다.
+(인수 시점 목표였던 로컬 Git/VS Code/Codex 개발과 사용자 배포 정리는 7~8절, 11절에서 완료했다.)
 
 ## 2. 버전과 확인 상태
 | 항목 | 상태 |
@@ -14,7 +15,7 @@
 | 업데이트 문제 | 제공된 1.0.1에 @downloadURL none이 들어갔다. 사용자는 자신의 배포본 업데이트를 막는 것에 이의를 제기했다. 조용히 유지하거나 배포하면 안 된다. |
 | Navigator POC 3 | 2026-09-08 리포트에 scriptVersion 0.3.0, phase PLAYING, finishedAt/result null. 실제 playing 확인은 있지만 해당 리포트는 완료 검증 결과가 아니다. |
 | Navigator POC 3.1 | `src/kcu-auto-navigator.user.js`에 0.3.1 내보낸 소스를 로컬 이관했다. 파일 존재는 사용자 전달·설치·실행 성공을 뜻하지 않는다. |
-| 현재 로컬 배포 소스 | Helper 1.0.2와 Navigator 0.3.2에 GitHub Raw `main`의 동일한 `@updateURL`/`@downloadURL`을 추가했다. Navigator 런타임 VERSION도 0.3.2로 맞췄다. 실제 Tampermonkey 설치본과의 일치 및 KCU 동작은 미검증이다. |
+| 현재 로컬 배포 소스 | Helper `1.1.1`, Navigator `0.4.1` (2026-09-14 기준, GitHub Raw `main`과 동일). 두 파일 모두 GitHub Raw `main`의 `@updateURL`/`@downloadURL`을 사용한다. 이력은 7절 이후 참고. |
 | 원격 저장소 | 공개 `krtokia/KCU_Lecture_Helper`, 기본 브랜치 `main`. GitHub Raw 자동 업데이트 메타데이터를 사용하며 실제 Tampermonkey 업데이트는 미검증. |
 
 Helper 교체는 Navigator 업그레이드가 아니다. 이전의 “이미 받은 3.1을 실행” 안내를 사실로 이어받지 않는다. [P1, P2, P4, P5]
@@ -66,12 +67,16 @@ ntfy 서버 응답 성공과 실제 단말 수신은 구분한다. [P1, P5]
 실제 한 차시 종료와 출석 재조회 리포트를 확보한 뒤에 연속 재생을 설계한다.
 
 ## 6. 다음 작업 순서
-A. 현재 설치본 export/개인 원본 백업 → 메타데이터 확인 → 로컬 연결 → 반영 확인 → 기본 기능 회귀 확인.
-B. ntfy 설정/활성 상태의 업데이트 후 유지 테스트 → GitHub 직접/Greasy Fork 유지 중 배포 경로 결정 → 승인 후 게시.
-C. 실제 Navigator 기준 소스에서 3.1 요구와 차이를 비교 → 별도 변경으로 구현 → 한 차시 검증 → 이후 연속 재생 설계.
+인수 시점의 A(로컬 연결)·B(배포 경로)·C(POC 3.1 한 차시 검증)는 모두 완료했다. 상세는 7~12절.
+
+2026-09-14 기준 남은 항목:
+- 메뉴 라벨 정리(27절) 뒤 실제 Tampermonkey 팝업에서 Helper 4개·Navigator 6개 항목 표기 확인.
+- Navigator Beta의 수동 pause 대기 및 오류·불일치 중단 경로 실제 재현 (26절 완주 리포트에는 미발생).
+- Helper 자동 재개가 실제 KCU에서 발동해 재생을 복구한 리포트 확보 (16절 도입 이후 미확보).
+- Navigator 시작·선택·재생·완료/실패 상태의 Windows/ntfy 알림 (12절에서 후보로만 기록, 미착수).
+- Greasy Fork 게시물 정리 여부 결정 (현재 GitHub Raw 자동 업데이트만 사용).
 
 새 작업 결과에는 실제 두 소스 버전/해시, 도구 버전, 변경 메타데이터, 수행한 검사와 미검증 사항을 남긴다.
-
 ## 7. 2026-09-09 로컬 이관 기록
 `src/kcu-lecture-helper.user.js`와 `src/kcu-auto-navigator.user.js`로 파일명을 정리했다. Helper는 개인 ntfy 상수를 제거하고, 빈 주소·비활성 기본값의 Tampermonkey 로컬 설정과 메뉴를 사용한다. `@connect ntfy.sh`와 배포용 URL 부재 상태는 그대로이며, 기존 Greasy Fork 게시물 변경과 Tampermonkey/KCU 브라우저 검증은 수행하지 않았다.
 민감한 경로/원본 로그는 공개 문서에 쓰지 않는다.
@@ -250,25 +255,6 @@ pause는 `ended: true`인 정상 종료와 함께 발생했으며, `nonEndPauseO
 독립적으로 다시 확인됐다. 출석 Y는 전체 시청 증명이 아니므로
 `fullViewingVerified: false`는 그대로다.
 
-## 22. 2026-09-10 Navigator POC 3.5 현재 재생 차시 인계 구현 (폐기됨)
-
-Navigator를 `0.3.7` / POC 3.5로 올렸다. 이는 POC 3.4가 실제 playing을 확인하고
-멈춰 둔 차시를 사용자가 계속 시청 중일 때 쓰는 후속 단계다. 시작 시 LMS 현재 행,
-iframe의 과목·주차·차시 identity, 출석 N·영상 Y, 실제 non-paused/non-ended/non-seeking
-video와 readyState 2 이상을 모두 확인한다. 하나라도 다르면 어떤 차시 버튼도 누르지
-않고 중단한다.
-
-전제가 맞으면 현재 차시는 `CURRENT_TARGET_ADOPTED`로 관찰만 인계한다. native ended
-또는 보조 종료 후보, 10초 유예, 새 UI AJAX 응답의 출석 Y를 확인한 뒤에만 기존과 동일한
-순서로 다음 적격 차시 하나의 사이트 버튼을 클릭해 실제 playing까지 확인하고 종료한다.
-현재 차시 재클릭, 현재/다음 차시의 시간·진도·출석 API 조작, 다음 차시 종료/출석 확인,
-세 번째 차시 및 과목 이동은 추가하지 않았다.
-
-두 UserScript 문법 검사, `git diff --check`, POC 3.4 식별자 잔존 여부와 현재 차시 버튼
-클릭 부재의 정적 검사를 통과했다. 실제 KCU/Tampermonkey 검증은 아직 필요하며, 새
-UserScript는 페이지 새로고침 후에만 주입되므로 이미 끝나가는 기존 3강에 소급 적용할 수
-없다. 배포·push는 하지 않았다.
-
 ## 18. 2026-09-10 Navigator POC 3.4 다음 차시 전환 1회 구현
 
 Navigator를 `0.3.6` / POC 3.4로 올렸다. 첫 미수강 영상은 기존과 같이 실제 재생,
@@ -343,7 +329,26 @@ Navigator는 `WAIT_MANUAL_RESUME`으로 전환했다. 이후 실제 playing을 �
 `STOP_AFTER_NEXT_PLAYING`으로 끝났고, 세 번째 선택·다음 종료 대기·다음 출석 검증은
 수행하지 않았다. `fullViewingVerified: false`는 그대로다.
 
-## 22. 2026-09-10 Navigator POC 3.5 과목 전체 탐색으로 교체
+## 22. 2026-09-10 Navigator POC 3.5 현재 재생 차시 인계 구현 (폐기됨)
+
+Navigator를 `0.3.7` / POC 3.5로 올렸다. 이는 POC 3.4가 실제 playing을 확인하고
+멈춰 둔 차시를 사용자가 계속 시청 중일 때 쓰는 후속 단계다. 시작 시 LMS 현재 행,
+iframe의 과목·주차·차시 identity, 출석 N·영상 Y, 실제 non-paused/non-ended/non-seeking
+video와 readyState 2 이상을 모두 확인한다. 하나라도 다르면 어떤 차시 버튼도 누르지
+않고 중단한다.
+
+전제가 맞으면 현재 차시는 `CURRENT_TARGET_ADOPTED`로 관찰만 인계한다. native ended
+또는 보조 종료 후보, 10초 유예, 새 UI AJAX 응답의 출석 Y를 확인한 뒤에만 기존과 동일한
+순서로 다음 적격 차시 하나의 사이트 버튼을 클릭해 실제 playing까지 확인하고 종료한다.
+현재 차시 재클릭, 현재/다음 차시의 시간·진도·출석 API 조작, 다음 차시 종료/출석 확인,
+세 번째 차시 및 과목 이동은 추가하지 않았다.
+
+두 UserScript 문법 검사, `git diff --check`, POC 3.4 식별자 잔존 여부와 현재 차시 버튼
+클릭 부재의 정적 검사를 통과했다. 실제 KCU/Tampermonkey 검증은 아직 필요하며, 새
+UserScript는 페이지 새로고침 후에만 주입되므로 이미 끝나가는 기존 3강에 소급 적용할 수
+없다. 배포·push는 하지 않았다.
+
+## 23. 2026-09-10 Navigator POC 3.5 과목 전체 탐색으로 교체
 
 직전 POC 3.5 현재 재생 차시 인계안은 POC 3.4가 이미 실측한 같은 과목 다음 차시 범위를
 중복했으므로 폐기했다. Navigator `0.3.8`은 LNB 첫 과목부터 순서대로 열린 주차의
@@ -359,7 +364,17 @@ Navigator는 `WAIT_MANUAL_RESUME`으로 전환했다. 이후 실제 playing을 �
 넣지 않는 설계 때문에 클릭 직전에 실패했다. `0.3.9`는 대상의 현재 DOM 버튼을 차시 번호,
 출석 N, 영상 Y로 재대조해 클릭하도록 수정했다. 실제 재시험이 필요하다.
 
-## 24. 2026-09-10 Navigator Beta 전체 과목 연속 실행 구현
+## 24. 2026-09-10 Helper 1.1.0 진단 메뉴 숨김
+
+Helper를 `1.1.0`으로 올렸다. 자동 재개 진단 수집과 리포트 함수는 보존했지만 콘솔
+출력·복사·파일 저장·초기화 메뉴는 등록하지 않는다. 남는 Helper 메뉴는 ntfy 주소
+설정/지우기, 자동 배속, 자동 소리 끄기, 비의도적 중지 자동 재개의 네 개다.
+
+두 UserScript 문법 검사와 `git diff --check`, Node 모의 메뉴 검사(진단 메뉴 0개,
+현재 설정 메뉴 4개, 자동 음소거 적용)를 통과했다. 실제 확장 메뉴는 새로고침 뒤
+확인이 필요하다. 배포·push는 하지 않았다.
+
+## 25. 2026-09-10 Navigator Beta 전체 과목 연속 실행 구현
 
 Navigator를 `0.4.0` Beta로 전환했다. POC 3.5의 첫 과목부터 LNB 순회 및 페이지 handoff를
 유지하고, 각 적격 차시의 actual playing 뒤 기존 종료 후보·유예·새 AJAX 출석 Y 검증을
@@ -370,7 +385,7 @@ Navigator를 `0.4.0` Beta로 전환했다. POC 3.5의 첫 과목부터 LNB 순�
 유지한다. autoplay 우회, `video.play()`, 시간·진도·출석 API 조작은 추가하지 않았다.
 실제 연속 두 차시 및 과목 경계 완료 검증은 다음 Beta 리포트에서 확인해야 한다.
 
-## 25. 2026-09-10 Navigator Beta 0.4.0 전 과목 완주 실측
+## 26. 2026-09-10 Navigator Beta 0.4.0 전 과목 완주 실측
 
 사용자가 제공한 `KCU_NAVIGATOR_BETA_REPORT_2026-09-10T11-23-54-143Z`는
 `PASS_ALL_COURSES_COMPLETED`로 끝났다. LNB 8개 과목을 첫 과목부터 순서대로
@@ -383,20 +398,10 @@ Navigator를 `0.4.0` Beta로 전환했다. POC 3.5의 첫 과목부터 LNB 순�
 pause 대기, 실패, 로그 드롭은 없었다. 출석 Y가 전체 시청 증명은 아니므로
 `fullViewingVerified: false`는 그대로다.
 
-## 26. 2026-09-10 제품형 메뉴 명칭 정리
+## 27. 2026-09-10 제품형 메뉴 명칭 정리
 
 Helper `1.1.1`은 `KCU 학습 도우미` 접두어로 알림 설정, 재생 속도, 자동 음소거,
 중단 시 자동 재개 메뉴를 표시한다. 각 토글은 `켜짐 → 꺼짐`처럼 현재 상태와 클릭 후
 상태를 짧게 보여 준다. Navigator `0.4.1`은 `KCU 학습 진행` 접두어로 시작·중지·상태
 보기·실행 기록 복사/저장·기록 초기화를 표시한다. 설정 키·handler·보고서 구조 및 안전
 정책은 변경하지 않았다.
-
-## 23. 2026-09-10 Helper 1.1.0 진단 메뉴 숨김
-
-Helper를 `1.1.0`으로 올렸다. 자동 재개 진단 수집과 리포트 함수는 보존했지만 콘솔
-출력·복사·파일 저장·초기화 메뉴는 등록하지 않는다. 남는 Helper 메뉴는 ntfy 주소
-설정/지우기, 자동 배속, 자동 소리 끄기, 비의도적 중지 자동 재개의 네 개다.
-
-두 UserScript 문법 검사와 `git diff --check`, Node 모의 메뉴 검사(진단 메뉴 0개,
-현재 설정 메뉴 4개, 자동 음소거 적용)를 통과했다. 실제 확장 메뉴는 새로고침 뒤
-확인이 필요하다. 배포·push는 하지 않았다.
